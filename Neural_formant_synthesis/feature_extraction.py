@@ -57,7 +57,7 @@ class feature_extractor(torch.nn.Module):
         roots_env, converge_flag = self.root_finder(ap_env)
         formants = root_to_formant(roots_env, self.formant_ceiling, self.max_formants)
         # Calculate other features
-        energy = frame_energy(x_frame)
+        energy = 10 * torch.log10(frame_energy(x_frame))
         centroid = spectral_centroid(x_frame, self.sr)
         tilt = tilt_levinson(x_ds_acorr)
 
