@@ -102,3 +102,79 @@ class MedianPool1d(torch.nn.Module):
         x = x.unfold(2, self.k, self.stride)
         x = x.contiguous().view(x.size()[:-1] + (-1,)).median(dim=-1)[0]
         return x
+    
+class Normaliser(torch.nn.Module):
+    """
+    Normalisation of features to a set of hard limits for training with online feature extraction.
+    Params:
+        sample_rate: sample rate
+        pitch_lims: tuple with pitch limits in log(Hz) (lower, upper)
+        formant_lims: tuple with formant limits in Hz (f1_lower, f1_upper, f2_lower, f2_upper, f3_lower, f3_upper, f4_lower, f4_upper)
+        tilt_lims: tuple with spectral tilt limits (lower, upper)
+        centroid_lims: tuple with spectral centroid limits in Hz (lower, upper)
+        energy_lims: tuple with energy limits in dB (lower, upper)
+    """
+    def __init__(self, sample_rate, pitch_lims = None, formant_lims = None, tilt_lims = None, centroid_lims = None, energy_lims = None):
+        super().__init__()
+        self.sample_rate = sample_rate
+        if pitch_lims is not None:
+            self.pitch_lower = pitch_lims[0]
+            self.pitch_upper = pitch_lims[1]
+        else:
+            self.pitch_lower = 3.9 # 50 Hz
+            self.pitch_higher = 7.3 # 1500 Hz
+
+        if formant_lims is not None:
+            self.f1_lower = formant_lims[0]
+            self.f1_upper = formant_lims[1]
+            self.f2_lower = formant_lims[2]
+            self.f2_upper = formant_lims[3]
+            self.f3_lower = formant_lims[4]
+            self.f3_upper = formant_lims[5]
+            self.f4_lower = formant_lims[6]
+            self.f4_upper = formant_lims[7]
+        else:
+            self.f1_lower = 200
+            self.f1_upper = 900
+            self.f2_lower = 550
+            self.f2_upper = 2450
+            self.f3_lower = 2200
+            self.f3_upper = 2950
+            self.f4_lower = 3000
+            self.f4_upper = 4000
+        
+        if tilt_lims is not None:
+            self.tilt_lower = tilt_lims[0]
+            self.tilt_upper = tilt_lims[1]
+        else:
+            self.tilt_lower = -1
+            self.tilt_upper = -0.9
+
+        if centroid_lims is not None:
+            self.centroid_lower = centroid_lims[0]
+            self.centroid_upper = centroid_lims[1]
+        else:
+            self.centroid_lower = 0
+            self.centroid_upper = self.sample_rate/2
+
+        if energy_lims is not None:
+            self.energy_lower = energy_lims[0]
+            self.energy_upper = energy_lims[1]
+        else:
+            self.energy_lower = -60
+            self.energy_upper = 0
+
+    def forward(self, pitch, formants, tilt, centroid, energy):
+        pitch = self._scale(pitch, self.pitch_upper, self.pitch_lower)
+        formants[...,0] = self._scale(formants[...,0],self.f1_upper, self.f1_lower)
+        formants[...,1] = self._scale(formants[...,1],self.f2_upper, self.f2_lower)
+        formants[...,2] = self._scale(formants[...,2],self.f3_upper, self.f3_lower)
+        formants[...,3] = self._scale(formants[...,3],self.f4_upper, self.f4_lower)
+        tilt = self._scale(tilt, self.tilt_upper, self.tilt_lower)
+        centroid = self._scale(centroid, self.centroid_upper, self.centroid_lower)
+        energy = self._scale(energy, self.energy_upper, self.energy_lower)
+
+    def _scale(self,feature, upper, lower):
+        max_denorm = upper - lower
+        feature = (2 * (feature - lower) / max_denorm) - 1
+        return feature
