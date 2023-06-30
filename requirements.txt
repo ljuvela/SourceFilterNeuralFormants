@@ -1,0 +1,6 @@
+numpy
+torch
+torchaudio
+diffsptk
+pyworld
+tqdm
