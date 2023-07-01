@@ -171,7 +171,7 @@ def pitch_extraction(x, sr, window_samples, step_samples, fmin = 50, fmax = 500)
         voicing_flag: tensor with voicing flags
     """
     # Convert to numpy
-    audio = x.numpy().squeeze().astype(np.float)
+    audio = x.numpy().squeeze().astype(np.float64)
 
     hopsize = float(step_samples) / sr
 
