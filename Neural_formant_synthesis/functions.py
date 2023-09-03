@@ -115,7 +115,7 @@ def root_to_formant(roots, sr, max_formants = 5):
     phases_slice = phases_sort[...,1:max_formants+1]
     phases_sort = phases_sort[...,:max_formants]
     
-    condition = (phases_sort[...,0:1] > freq_tolerance).repeat(1,max_formants) #Use expand instead of repeat
+    condition = (phases_sort[...,0:1] > freq_tolerance).expand(-1,max_formants) #Use expand instead of repeat
 
     phase_select = torch.where(condition, phases_sort, phases_slice)
     formants = phase_select * (sr / (2 * np.pi))
@@ -130,7 +130,7 @@ def interpolate_unvoiced(pitch, voicing_flag = None):
     With a differentiable version, we could add this functionality to the formant extractor.
     """
     if voicing_flag is None:
-        unvoiced = pitch == 0
+        unvoiced = pitch < 10
     else:
         unvoiced = ~voicing_flag
 
@@ -141,6 +141,8 @@ def interpolate_unvoiced(pitch, voicing_flag = None):
         # Pitch is linear in base-2 log-space
         pitch = np.log2(pitch)
 
+    ignored = False
+
     try:
 
         # Interpolate
@@ -150,11 +152,12 @@ def interpolate_unvoiced(pitch, voicing_flag = None):
             pitch[~unvoiced])
 
     except ValueError:
-
+        ignored = True
         # Allow all unvoiced
+        print('Allowing unvoiced')
         pass
 
-    return 2 ** pitch, ~unvoiced
+    return 2 ** pitch, ~unvoiced, ignored
 
 def pitch_extraction(x, sr, window_samples, step_samples, fmin = 50, fmax = 500):
     """
@@ -191,7 +194,7 @@ def pitch_extraction(x, sr, window_samples, step_samples, fmin = 50, fmax = 500)
         sr)
 
     # Interpolate unvoiced tokens
-    pitch, voicing_flag = interpolate_unvoiced(pitch)
+    pitch, voicing_flag, ignored = interpolate_unvoiced(pitch)
 
     # Convert to torch
-    return torch.from_numpy(pitch)[None], torch.tensor(voicing_flag, dtype = torch.int)
+    return torch.from_numpy(pitch)[None], torch.tensor(voicing_flag, dtype = torch.int), ignored

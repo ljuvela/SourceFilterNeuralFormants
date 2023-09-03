@@ -1,6 +1,6 @@
 import torch
 import diffsptk
-from functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
+from Neural_formant_synthesis.functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
 
 class feature_extractor(torch.nn.Module):
     """
@@ -62,9 +62,9 @@ class feature_extractor(torch.nn.Module):
         tilt = tilt_levinson(x_ds_acorr)
 
         # Extract pitch from audio signal
-        pitch, voicing = pitch_extraction(x = x, sr = self.sr, window_samples = self.window_samples, step_samples = self.step_samples, fmin = 50, fmax = 500)#penn.dsp.dio.from_audio(audio = x, sample_rate = self.sr, hopsize = hopsize, fmin = 50, fmax = 500)
-
-        return formants, energy, centroid, tilt, pitch, voicing, r_coeff_ref, x_ds
+        pitch, voicing, ignored = pitch_extraction(x = x, sr = self.sr, window_samples = self.window_samples, step_samples = self.step_samples, fmin = 50, fmax = 500)#penn.dsp.dio.from_audio(audio = x, sample_rate = self.sr, hopsize = hopsize, fmin = 50, fmax = 500)
+        pitch = torch.log(pitch)
+        return formants, energy, centroid, tilt, pitch, voicing, r_coeff_ref, x_ds, ignored
 
 class MedianPool1d(torch.nn.Module):
     """ Median pool (usable as median filter when stride=1) module.
@@ -122,7 +122,7 @@ class Normaliser(torch.nn.Module):
             self.pitch_upper = pitch_lims[1]
         else:
             self.pitch_lower = 3.9 # 50 Hz
-            self.pitch_higher = 7.3 # 1500 Hz
+            self.pitch_upper = 7.3 # 1500 Hz
 
         if formant_lims is not None:
             self.f1_lower = formant_lims[0]
@@ -162,7 +162,7 @@ class Normaliser(torch.nn.Module):
             self.energy_upper = energy_lims[1]
         else:
             self.energy_lower = -60
-            self.energy_upper = 0
+            self.energy_upper = 30
 
     def forward(self, pitch, formants, tilt, centroid, energy):
         pitch = self._scale(pitch, self.pitch_upper, self.pitch_lower)
@@ -170,9 +170,10 @@ class Normaliser(torch.nn.Module):
         formants[...,1] = self._scale(formants[...,1],self.f2_upper, self.f2_lower)
         formants[...,2] = self._scale(formants[...,2],self.f3_upper, self.f3_lower)
         formants[...,3] = self._scale(formants[...,3],self.f4_upper, self.f4_lower)
-        tilt = self._scale(tilt, self.tilt_upper, self.tilt_lower)
+        tilt = self._scale(torch.clamp(tilt, -1, -0.85), self.tilt_upper, self.tilt_lower)
         centroid = self._scale(centroid, self.centroid_upper, self.centroid_lower)
         energy = self._scale(energy, self.energy_upper, self.energy_lower)
+        return pitch, formants, tilt, centroid, energy
 
     def _scale(self,feature, upper, lower):
         max_denorm = upper - lower

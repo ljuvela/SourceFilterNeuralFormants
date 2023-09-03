@@ -5,6 +5,7 @@ import torchaudio as ta
 from tqdm import tqdm
 
 from feature_extraction import feature_extractor, MedianPool1d
+from glotnet.sigproc.emphasis import Emphasis
 
 ta.set_audio_backend("sox_io")
 
@@ -24,6 +25,7 @@ def main(vctk_path, target_dir):
     # Declare feature extractor
     feat_extractor = feature_extractor(sr = target_sr,window_samples = window_length, step_samples = step_length, formant_ceiling = 10000, max_formants = 4)
     median_filter = MedianPool1d(kernel_size = 3, stride = 1, padding = 0, same = True)
+    pre_emphasis = Emphasis(alpha=0.97)
 
     # Divide vctk dataset into train, validation and test sets
     divide_vctk(vctk_path, target_dir, file_ext = file_ext)
@@ -31,11 +33,11 @@ def main(vctk_path, target_dir):
     # Process train, validation and test sets
     print("Processing separated sets")
     train_dir = os.path.join(target_dir, 'train')
-    process_directory(train_dir, target_sr, feat_extractor, median_filter, file_ext = file_ext)
+    process_directory(train_dir, target_sr, feat_extractor, median_filter, pre_emphasis = pre_emphasis, file_ext = file_ext)
     val_dir = os.path.join(target_dir, 'val')
-    process_directory(val_dir, target_sr, feat_extractor, median_filter, file_ext = file_ext)
+    process_directory(val_dir, target_sr, feat_extractor, median_filter, pre_emphasis = pre_emphasis, file_ext = file_ext)
     test_dir = os.path.join(target_dir, 'test')
-    process_directory(test_dir, target_sr, feat_extractor, median_filter, file_ext = file_ext)
+    process_directory(test_dir, target_sr, feat_extractor, median_filter, pre_emphasis = pre_emphasis, file_ext = file_ext)
 
 def divide_vctk(vctk_path, target_dir, file_ext = '.wav'):
     """
@@ -75,38 +77,52 @@ def divide_vctk(vctk_path, target_dir, file_ext = '.wav'):
     print("Dividing Speakers")
 
     # Copy audio files in each speaker directory to train, validation and test directories
+    trainfile = open(os.path.join(target_dir, "train_files.txt"), 'w')
     for speaker in tqdm(train_speakers, total = len(train_speakers)):
         speaker_dir = os.path.join(vctk_path, speaker)
         speaker_files = glob.glob(os.path.join(speaker_dir, '*' + file_ext))
         for file in speaker_files:
             os.system('cp ' + file + ' ' + train_dir)
+        trainfile.writelines([str(i)+'\n' for i in speaker_files])
+    trainfile.close()
+
+    valfile = open(os.path.join(target_dir, "val_files.txt"), 'w')
     for speaker in tqdm(val_speakers, total = len(val_speakers)):
         speaker_dir = os.path.join(vctk_path, speaker)
         speaker_files = glob.glob(os.path.join(speaker_dir, '*' + file_ext))
         for file in speaker_files:
             os.system('cp ' + file + ' ' + val_dir)
+        valfile.writelines([str(i)+'\n' for i in speaker_files])
+    valfile.close()
+
+    testfile = open(os.path.join(target_dir, "test_files.txt"), 'w')
     for speaker in tqdm(test_speakers,total = len(test_speakers)):
         speaker_dir = os.path.join(vctk_path, speaker)
         speaker_files = glob.glob(os.path.join(speaker_dir, '*' + file_ext))
         for file in speaker_files:
             os.system('cp ' + file + ' ' + test_dir)
+        testfile.writelines([str(i)+'\n' for i in speaker_files])
+    testfile.close()
 
 
-def process_directory(path, target_sr, feature_extractor, median_filter, file_ext = '.wav'):
+def process_directory(path, target_sr, feature_extractor, median_filter, pre_emphasis = None, file_ext = '.wav'):
     file_list = glob.glob(os.path.join(path, '*' + file_ext))
     for file in tqdm(file_list, total=len(file_list)):
         basename = os.path.basename(file)
         no_ext = os.path.splitext(basename)[0]
 
-        formants, energy, centroid, tilt, log_pitch, voicing_flag, r_coeff = process_file(file, target_sr, feature_extractor, median_filter)
+        formants, energy, centroid, tilt, log_pitch, voicing_flag, r_coeff, ignored = process_file(file, target_sr, feature_extractor, median_filter, pre_emphasis = pre_emphasis)
 
         if formants.size(0) < log_pitch.size(0):
             raise ValueError("Formants size is different than pitch size for file: " + file)
 
-        feature_dict = {"Formants": formants, "Energy": energy, "Centroid": centroid, "Tilt": tilt, "Pitch": log_pitch, "Voicing": voicing_flag, "R_Coeff": r_coeff}     
-        torch.save(feature_dict, os.path.join(path, no_ext + '.pt'))
+        feature_dict = {"Formants": formants, "Energy": energy, "Centroid": centroid, "Tilt": tilt, "Pitch": log_pitch, "Voicing": voicing_flag, "R_Coeff": r_coeff} 
+        if not ignored:    
+            torch.save(feature_dict, os.path.join(path, no_ext + '.pt'))
+        else:
+            print("File: " + basename + " ignored.")
 
-def process_file(file, target_sr, feature_extractor, median_filter):
+def process_file(file, target_sr, feature_extractor, median_filter, pre_emphasis = None):
     """
     Extract features for a single audio file and return feature arrays with the same length.
     Params:
@@ -124,11 +140,14 @@ def process_file(file, target_sr, feature_extractor, median_filter):
     """
     # Read audio file
     x, sample_rate = ta.load(file)
-    x = x[0].type(torch.DoubleTensor)
+    x = x[0:1].type(torch.DoubleTensor)
     # Resample to target sr
     x = ta.functional.resample(x, sample_rate, target_sr)
 
-    formants, energy, centroid, tilt, pitch, voicing_flag,r_coeff, _ = feature_extractor(x)
+    if pre_emphasis is not None:
+        x = pre_emphasis(x.unsqueeze(0))
+    x = x.squeeze(0).squeeze(0)
+    formants, energy, centroid, tilt, pitch, voicing_flag,r_coeff, _, ignored = feature_extractor(x)
 
     formants = median_filter(formants.T.unsqueeze(1)).squeeze(1).T
 
@@ -146,9 +165,9 @@ def process_file(file, target_sr, feature_extractor, median_filter):
     
     log_pitch = torch.log(pitch)
 
-    return formants, energy, centroid, tilt, log_pitch, voicing_flag, r_coeff
+    return formants, energy, centroid, tilt, log_pitch, voicing_flag, r_coeff, ignored
 
 if __name__ == "__main__":
-    vctk_path = '/Users/pablopz/Datasets/VCTK-Corpus-0.92/wav48_silence_trimmed'
-    target_dir = '/Users/pablopz/Datasets/vctk_features'
+    vctk_path = '/workspace/Dataset/wav48_silence_trimmed'
+    target_dir = '/workspace/Dataset/vctk_features'
     main(vctk_path, target_dir)
