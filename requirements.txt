@@ -1,6 +1,8 @@
-numpy
+numpy == 1.24.4
 torch
 torchaudio
 diffsptk
 pyworld
 tqdm
+ipdb
+tensorboard
