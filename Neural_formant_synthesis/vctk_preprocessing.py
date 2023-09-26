@@ -4,6 +4,8 @@ import torch
 import torchaudio as ta
 from tqdm import tqdm
 
+import argparse
+
 from feature_extraction import feature_extractor, MedianPool1d
 from glotnet.sigproc.emphasis import Emphasis
 
@@ -168,6 +170,15 @@ def process_file(file, target_sr, feature_extractor, median_filter, pre_emphasis
     return formants, energy, centroid, tilt, log_pitch, voicing_flag, r_coeff, ignored
 
 if __name__ == "__main__":
-    vctk_path = '/workspace/Dataset/wav48_silence_trimmed'
-    target_dir = '/workspace/Dataset/vctk_features'
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--input_dir', default='/workspace/Dataset/wav48_silence_trimmed')
+    parser.add_argument('--output_dir', default='/workspace/Dataset/vctk_features')
+    
+
+    a = parser.parse_args()
+
+    vctk_path = os.path.normpath(a.input_dir)
+    target_dir = os.path.normpath(a.output_dir)
     main(vctk_path, target_dir)
