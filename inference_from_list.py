@@ -146,27 +146,13 @@ def generate_wave_list(file_list, scale_list, a, h, fm_h, env_h):
         if not os.path.exists(out_orig_path):
             ta.save(out_orig_path, x.type(torch.FloatTensor), target_sr)
 
-
-def get_file_list(file_path, dataset_path):
+def parse_file_list(list_file):
     """
-    Read the files from list in csv file and parse them to paths in the dataset.
+    Read text file with paths to the files to process.
     """
-    list_df = pd.read_csv(file_path)
-
-    file_list = []
-
-    for index, row in list_df.iterrows():
-        file = list_df.iloc[index,0]
-
-        speaker = file.split('_')[0]
-
-        file_name = file + '_mic1.flac'
-
-        file_data_path = os.path.join(dataset_path, speaker, file_name)
-
-        file_list.append(file_data_path)
-    
-    return file_list
+    file1 = open(list_file, 'r')
+    lines = file1.read().splitlines()
+    return lines
 
 def str_to_list(in_str):
     return list(map(float, in_str.strip('[]').split(',')))
@@ -176,8 +162,7 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--input_file')
-    parser.add_argument('--dataset_path')
+    parser.add_argument('--list_file')
     parser.add_argument('--output_path', default='test_output')
     parser.add_argument('--config', default='')
     parser.add_argument('--fm_config', default='')
@@ -205,7 +190,7 @@ def main():
 
     build_env(a.config, 'config.json', a.checkpoint_path)
 
-    file_list = get_file_list(a.input_file, a.dataset_path)
+    file_list = parse_file_list(a.list_file)
 
     if not os.path.exists(a.output_path):
         os.mkdir(a.output_path)
