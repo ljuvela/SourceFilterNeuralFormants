@@ -15,17 +15,30 @@ Authors: [Pablo Pérez Zarazaga][pablo_profile], [Zofia Malisz][zofia_profile], 
 
 [lfs_link]:https://git-lfs.com
 
-## Model examples
+## Table of contents
+1. [Model structure](#model_struct)
+    1. [Audio samples](#audio_samp)
+2. [Repository installation](#install)
+    1. [Conda environment](#conda)
+    2. [GlotNet](#glotnet)
+    3. [HiFi-GAN](#hifi)
+    4. [Additional libraries](#additional)
+3. [Pre-trained models](#pretrained)
+4. [Inference](#inference)
+5. [Training](#training)
+6. [Citation information](#citation)
+
+## Model structure <a name="model_struct"></a>
 
 A description of the presented model and sound samples compared to other synthesis/manipulation systems can be found in the [project's demo webpage][demopage_link]
 
-
+#### Audio samples <a name="audio_samp"></a>
 
 Link to demo page and small example of generated sounds.
 
-## Repository installation
+## Repository installation <a name="install"></a>
 
-#### Conda environment
+#### Conda environment <a name="conda"></a>
 
 First, we need to create a conda environment to install our dependencies.
 ```sh
@@ -33,7 +46,7 @@ conda create -n neuralformants python=3.10
 conda activate neuralformants
 ```
 
-#### GlotNet
+#### GlotNet <a name="glotnet"></a>
 GlotNet module is required for some models and functions. Available here [here][GlotNet_link]
 
 We can clone the Glotnet repository in the root directory of this project and follow the instructions in it for installation.
@@ -59,10 +72,10 @@ cd ..
 
 ```
 
-#### HiFi-GAN
+#### HiFi-GAN <a name="hifi"></a>
 HiFi-GAN is included in the `hifi_gan` subdirectory. Original source code is available [here][HiFi_link]
 
-#### Additional libraries
+#### Additional libraries <a name="additional"></a>
 
 Additional libraries that can't be found through conda need to be installed using pip.
 
@@ -70,7 +83,7 @@ Additional libraries that can't be found through conda need to be installed usin
 pip install diffsptk pyworld
 ```
 
-## Pre-trained model
+## Pre-trained model <a name="pretrained"></a>
 
 Pre-trained models for every module of the proposed system are stored in HuggingFace. In order to download them, first it is necessary to have [git-lfs][lfs_link] installed.
 
@@ -82,7 +95,7 @@ git clone git@hf.co:pablopz/SourceFilterNeuralFormants
 
 The config.json files in nthe pretrained models are adapted to work if the models are cloned in the root directory of the project. Change the path defined in those files if necessary.
 
-## Inference
+## Inference <a name="inference"></a>
 
 We provide a script to run inference on the end-to-end architecture, such that an audio file can be provided as input and a wav file with the manipulated features is stored as output.
 
@@ -94,12 +107,12 @@ python inference_from_list.py --list_file "[path to txt file with file list]" --
 
 The input to the inference script is provided as a txt file containing a list of paths to each of the audio files to process, separated by end of line. Additionally, the parameter [scale array] is a string with the format "[F0, F1, F2, F3, F4]", where each of the elements represents the scaling factor applied to each of the corresponding parameters.
 
-## Model training
+## Model training <a name="training"></a>
 
 Training of the HiFi-GAN model excitation is possible in the end-to-end architecture by using the the script "train_e2e_DDSPNF.py".
 
 More details on how to train the different models will be provided in the future.
 
-## Citation information
+## Citation information <a name="citation"></a>
 
 Citation information will be added when a pre-print is available.
