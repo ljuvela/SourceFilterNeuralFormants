@@ -30,11 +30,69 @@ Authors: [Pablo Pérez Zarazaga][pablo_profile], [Zofia Malisz][zofia_profile], 
 
 ## Model structure <a name="model_struct"></a>
 
+We present a model that performs neural speech synthesis using the structure of the source-filter model, allowing to independently inspect and manipulate the spectral envelope and glottal excitation:
+
+![Neural formant pipeline follwing the source-filter model architectrue](./Images/DDSPNF_Diagram.png "Neural formant pipeline follwing the source-filter model architectrue.")
+
 A description of the presented model and sound samples compared to other synthesis/manipulation systems can be found in the [project's demo webpage][demopage_link]
 
 #### Audio samples <a name="audio_samp"></a>
 
-Link to demo page and small example of generated sounds.
+An example of scaling the values of F1 for voiced sounds with the proposed method:
+
+<table class="tg">
+  <thead>
+    <tr>
+      <th class="tg-0pky">Scale F1</th>
+      <th class="tg-0pky" colspan="1">0.7</th>
+      <th class="tg-0pky" colspan="1">0.8</th>
+      <th class="tg-0pky" colspan="1">0.9</th>
+      <th class="tg-0pky" colspan="1">1.1</th>
+      <th class="tg-0pky" colspan="1">1.2</th>
+      <th class="tg-0pky" colspan="1">1.3</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td nowrap="" class="tg-0pky"><b>Manipulated Samples</b></td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_0.7_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_0.8_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_0.9_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_1.0_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_1.1_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_1.2_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+      <td class="tg-0pky">
+        <audio id="audio-small" controls="">
+          <source src="./Samples/p282_101_mic1_wave_1.0_1.3_1.0_1.0_1.0.wav" type="audio/wav" preload="none"/>
+        </audio>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ## Repository installation <a name="install"></a>
 
