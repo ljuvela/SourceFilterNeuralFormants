@@ -84,7 +84,14 @@ pip install diffsptk pyworld
 
 ## Pre-trained model <a name="pretrained"></a>
 
-Pre-trained models for every module of the proposed system are stored in HuggingFace. In order to download them, first it is necessary to have [git-lfs][lfs_link] installed.
+Pre-trained models for every module of the proposed system are stored in HuggingFace. Check the model card at https://huggingface.co/pablopz/SourceFilterNeuralFormants
+
+In order to download them, first it is necessary to have [git-lfs][lfs_link] installed.
+
+```sh
+# install git-lfs with conda in case it's missing
+conda install -c conda-forge git-lfs
+```
 
 ```sh
 # Activate git-lfs and download pre-trained models
