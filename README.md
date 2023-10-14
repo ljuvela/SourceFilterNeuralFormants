@@ -46,12 +46,12 @@ conda activate neuralformants
 ```
 
 #### GlotNet <a name="glotnet"></a>
-GlotNet module is required for some models and functions. Available here [here][GlotNet_link]
+GlotNet module is required for WaveNet models and DSP functions. Full repository is available [here][GlotNet_link]
 
-We can clone the Glotnet repository in the root directory of this project and follow the instructions in it for installation.
+We can clone the Glotnet repository in the root directory of this project and follow the instructions in it for installation. The process involves building some PyTorch C++ extensions and will take a few minutes.
 
 ```sh
-git clone git@github.com:ljuvela/GlotNet.git
+git clone https://github.com/ljuvela/GlotNet.git
 cd GlotNet
 
 # Install GlotNet requirements in with conda
