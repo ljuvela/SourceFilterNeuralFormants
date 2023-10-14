@@ -96,10 +96,10 @@ conda install -c conda-forge git-lfs
 ```sh
 # Activate git-lfs and download pre-trained models
 git lfs install
-git clone git@hf.co:pablopz/SourceFilterNeuralFormants
+git clone https://huggingface.co/pablopz/SourceFilterNeuralFormants 
 ```
 
-The config.json files in nthe pretrained models are adapted to work if the models are cloned in the root directory of the project. Change the path defined in those files if necessary.
+The config.json files in the pretrained models are adapted to work if the models are cloned in the root directory of the project. Change the path defined in those files if necessary.
 
 ## Inference <a name="inference"></a>
 
