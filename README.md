@@ -108,7 +108,13 @@ We provide a script to run inference on the end-to-end architecture, such that a
 In order to run inference on the proposed model, run the following command:
 
 ```sh
-python inference_from_list.py --list_file "[path to txt file with file list]" --output_path "[path to output directory]" --config "[path to HiFi-GAN config file]" --fm_config "[path to feature mapping model config file]" --env_config "[path to envelope estimation config file]" --checkpoint_path "[path to checkpoint file]" --feature_scale "[scale array]"
+python inference_from_list.py --input_path "[path to directory with audio samples to process]" --output_path "[path to output directory]" --config "[path to HiFi-GAN config file]" --fm_config "[path to feature mapping model config file]" --env_config "[path to envelope estimation config file]" --checkpoint_path "[path to checkpoint file]" --feature_scale "[scale array]"
+```
+
+An example with the provided audio samples from the VCTK dataset can be run using:
+
+```sh
+python inference_from_list.py --input_path "./Samples" --output_path "./Generated_Samples" --config "./SourceFilterNeuralFormants/HiFiExcitation/config.json" --fm_config "./SourceFilterNeuralFormants/FeatureMapping/config.json" --env_config "./SourceFilterNeuralFormants/EnvelopeEstimator/config.json" --checkpoint_path "./SourceFilterNeuralFormants/HiFiExcitation" --feature_scale "[1.0,1.0,1.0,1.0,1.0]"
 ```
 
 The input to the inference script is provided as a txt file containing a list of paths to each of the audio files to process, separated by end of line. Additionally, the parameter [scale array] is a string with the format "[F0, F1, F2, F3, F4]", where each of the elements represents the scaling factor applied to each of the corresponding parameters.
