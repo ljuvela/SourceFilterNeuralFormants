@@ -20,6 +20,7 @@ from glotnet.sigproc.levinson import forward_levinson
 import torchaudio as ta
 import pandas as pd
 from tqdm import tqdm
+from glob import glob
 
 
 torch.backends.cudnn.benchmark = True
@@ -162,13 +163,15 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--list_file')
-    parser.add_argument('--output_path', default='test_output')
-    parser.add_argument('--config', default='')
-    parser.add_argument('--fm_config', default='')
-    parser.add_argument('--env_config', default='')
-    parser.add_argument('--checkpoint_path')
-    parser.add_argument('--feature_scale')
+    parser.add_argument('--input_path', default = None, description="Path to directory containing files to process.")
+    parser.add_argument('--list_file', default = None, description="Text file containing list of files to process. Optional argument to use instead of input_path.")
+    parser.add_argument('--output_path', default='test_output', description="Path to directory to save processed files")
+    parser.add_argument('--config', default='', description="Path to HiFi-GAN config json file")
+    parser.add_argument('--fm_config', default='', description="Path to feature mapping model config json file")
+    parser.add_argument('--env_config', default='', description="Path to envelope estimation model config json file")
+    parser.add_argument('--audio_ext', default = '.wav', description="Extension of the audio files to process")
+    parser.add_argument('--checkpoint_path', description="Path to pre-trained HiFi-GAN model")
+    parser.add_argument('--feature_scale', description="List of scales for pitch and formant frequencies -- [F0, F1, F2, F3, F4]")
 
     a = parser.parse_args()
 
@@ -189,8 +192,12 @@ def main():
     env_h = fm_config_obj(json_env_config)
 
     build_env(a.config, 'config.json', a.checkpoint_path)
-
-    file_list = parse_file_list(a.list_file)
+    if a.input_path is not None:
+        file_list = glob(os.path.join(a.input_path,'*' + a.audio_ext))
+    elif a.list_file is not None:
+        file_list = parse_file_list(a.list_file)
+    else:
+        raise ValueError('Input arguments should include either input_path or file_list')
 
     if not os.path.exists(a.output_path):
         os.mkdir(a.output_path)
