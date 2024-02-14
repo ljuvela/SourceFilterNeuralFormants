@@ -1,6 +1,8 @@
 import torch
 import diffsptk
-from Neural_formant_synthesis.functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
+# from Neural_formant_synthesis.functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
+from .functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
+
 
 class feature_extractor(torch.nn.Module):
     """
@@ -31,7 +33,8 @@ class feature_extractor(torch.nn.Module):
         in_length = self.window_samples
         )
 
-        self.root_finder = diffsptk.DurandKernerMethod(self.allpole_order)
+        # self.root_finder = diffsptk.DurandKernerMethod(self.allpole_order)
+        self.root_finder = diffsptk.PolynomialToRoots(self.allpole_order)
 
     def forward(self, x):
         # Signal windowing
@@ -54,7 +57,7 @@ class feature_extractor(torch.nn.Module):
         ap_env, _ = levinson(x_ds_acorr, self.allpole_order)
         _, r_coeff_ref = levinson(x_us_acorr, self.r_coeff_order)
 
-        roots_env, converge_flag = self.root_finder(ap_env)
+        roots_env = self.root_finder(ap_env)
         formants = root_to_formant(roots_env, self.formant_ceiling, self.max_formants)
         # Calculate other features
         energy = 10 * torch.log10(frame_energy(x_frame))

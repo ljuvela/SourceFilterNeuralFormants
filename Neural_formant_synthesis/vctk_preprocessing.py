@@ -109,6 +109,7 @@ def divide_vctk(vctk_path, target_dir, file_ext = '.wav'):
 
 def process_directory(path, target_sr, feature_extractor, median_filter, pre_emphasis = None, file_ext = '.wav'):
     file_list = glob.glob(os.path.join(path, '*' + file_ext))
+    print(f"Processing directory {path}")
     for file in tqdm(file_list, total=len(file_list)):
         basename = os.path.basename(file)
         no_ext = os.path.splitext(basename)[0]
@@ -119,7 +120,7 @@ def process_directory(path, target_sr, feature_extractor, median_filter, pre_emp
             raise ValueError("Formants size is different than pitch size for file: " + file)
 
         feature_dict = {"Formants": formants, "Energy": energy, "Centroid": centroid, "Tilt": tilt, "Pitch": log_pitch, "Voicing": voicing_flag, "R_Coeff": r_coeff} 
-        if not ignored:    
+        if not ignored:
             torch.save(feature_dict, os.path.join(path, no_ext + '.pt'))
         else:
             print("File: " + basename + " ignored.")

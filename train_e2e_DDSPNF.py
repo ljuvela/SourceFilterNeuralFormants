@@ -4,6 +4,7 @@ import itertools
 import os
 import time
 import argparse
+
 import json
 import torch
 import torch.nn.functional as F
@@ -48,18 +49,24 @@ def train(rank, a, h, fm_h, env_h):
 
     # Model loader depending on the type of envelope estimation model.
     if env_h.type == "WaveNet":
-        env_estim = Envelope_wavenet(config = env_h, use_pretrained = True, freeze_weights = True, device = device)
+        env_estim = Envelope_wavenet(config = env_h, use_pretrained = a.envelope_model_pretrained,
+                                     freeze_weights = a.envelope_model_freeze, device = device)
     elif env_h.type == "Conformer":
         env_estim = Envelope_conformer(config = env_h, device = device, pre_trained = env_h.model_path, freeze_weights=True)
     
     # HiFi generator included in feature mapping class.
-    generator = FM_Hifi_Generator(fm_config = fm_h, g_config = h, pretrained_fm = fm_h.model_path, freeze_fm = True, device = device)
+    pretrained_fm = fm_h.model_path
+    generator = FM_Hifi_Generator(fm_config = fm_h, g_config = h,
+                                  pretrained_fm = pretrained_fm,
+                                  freeze_fm = pretrained_fm is not None, 
+                                  device = device)
     generator.pre_emphasis = Emphasis(alpha=h.pre_emph_coeff).to(device)
     generator.lpc = LinearPredictor(
             n_fft=h.n_fft,
             hop_length=h.hop_size,
             win_length=h.win_size,
             order=h.allpole_order)
+    generator.env_estim = env_estim
 
     env_estim.to(device)
     generator = generator.to(device)
@@ -75,6 +82,7 @@ def train(rank, a, h, fm_h, env_h):
         cp_g = scan_checkpoint(a.checkpoint_path, 'g_')
         cp_do = scan_checkpoint(a.checkpoint_path, 'do_')
 
+    import ipdb; ipdb.set_trace()
     steps = 0
     if cp_g is None or cp_do is None:
         state_dict_do = None
@@ -151,7 +159,7 @@ def train(rank, a, h, fm_h, env_h):
 
             if rank == 0:
                 start_b = time.time()
-            
+
             #size --> (Batch, features, sequence)
             x, _, y, y_mel = batch
             x = torch.autograd.Variable(x.to(device, non_blocking=True))
@@ -159,14 +167,27 @@ def train(rank, a, h, fm_h, env_h):
             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
             y = y.unsqueeze(1)
 
+            y_emph = generator.pre_emphasis.emphasis(y)
+            allpole_y = generator.lpc.estimate(y_emph[:, 0, :])
+            # trim extra frame(s)
+            allpole_y = allpole_y[..., :y_mel.size(-1)]
+
+            env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
+
             x_feat = x[:,0:9,:]
-            y_env = x[:,9:,:] # Envelope is estimated with model
+            # y_env = x[:,9:,:] # Envelope is estimated with model
 
             x_env = env_estim(x_feat)
 
             x = torch.cat((x_feat, x_env), dim = -2)
 
             allpole = torch.transpose(forward_levinson(torch.transpose(x_env,1,2)), 1,2)
+
+            # TODO: set order to 30, not 31!
+            env_fft_x = torch.fft.rfft(allpole, n=512, dim=1).abs()
+
+            env_fft_x_log = torch.log(env_fft_x + 1e-6)
+            env_fft_y_log = torch.log(env_fft_y + 1e-6)
 
             # generate excitation
             e_g_hat = generator(x)
@@ -198,8 +219,14 @@ def train(rank, a, h, fm_h, env_h):
             # Generator
             optim_g.zero_grad()
 
+            # TODO:
+            # 1) match predicted envelope to ground truth LPC estimate
+            # 2) match generated signal LPC estimate to ground truth LPC estimate
+
             # L1 Mel-Spectrogram Loss
             loss_mel = F.l1_loss(y_mel, y_g_hat_mel) * 45
+
+            loss_env_l2 = (env_fft_x_log - env_fft_y_log).pow(2).mean()    
 
             y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mpd(y, y_g_hat)
             y_ds_hat_r, y_ds_hat_g, fmap_s_r, fmap_s_g = msd(y, y_g_hat)
@@ -207,7 +234,7 @@ def train(rank, a, h, fm_h, env_h):
             loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
             loss_gen_f, losses_gen_f = generator_adversarial_loss(y_df_hat_g)
             loss_gen_s, losses_gen_s = generator_adversarial_loss(y_ds_hat_g)
-            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
+            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel + loss_env_l2
 
             loss_gen_all.backward()
             optim_g.step()
@@ -239,6 +266,7 @@ def train(rank, a, h, fm_h, env_h):
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
                     sw.add_scalar("training/mel_spec_error", mel_error, steps)
+                    sw.add_scalar("training/envelope_l2_loss", loss_env_l2, steps)
                     # Framed Discriminator losses
                     sw.add_scalar("training_gan/disc_f_r", sum(losses_disc_f_r), steps)
                     sw.add_scalar("training_gan/disc_f_g", sum(losses_disc_f_g), steps)
@@ -333,6 +361,8 @@ def main():
     parser.add_argument('--validation_interval', default=1000, type=int)
     parser.add_argument('--fine_tuning', default=False, type=bool)
     parser.add_argument('--wavefile_ext', default='.wav', type=str)
+    parser.add_argument('--envelope_model_pretrained', default=False, type=bool)
+    parser.add_argument('--envelope_model_freeze', default=False, type=bool)
 
     a = parser.parse_args()
 
@@ -353,6 +383,7 @@ def main():
     env_h = fm_config_obj(json_env_config)
 
     build_env(a.config, 'config.json', a.checkpoint_path)
+    # TODO: copy configs for feature mapping and envelope models!
 
     torch.manual_seed(h.seed)
     if torch.cuda.is_available():

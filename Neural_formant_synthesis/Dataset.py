@@ -6,7 +6,9 @@ import torch
 import torchaudio as ta
 from torch.utils.data import Dataset
 from typing import List, Tuple
-from Neural_formant_synthesis.feature_extraction import Normaliser
+# from Neural_formant_synthesis.feature_extraction import Normaliser
+from .feature_extraction import Normaliser
+
 from glotnet.sigproc.levinson import forward_levinson
 
 from hifi_gan.meldataset import mel_spectrogram

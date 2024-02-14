@@ -9,8 +9,10 @@ from hifi_gan.models import Generator
 from hifi_gan.utils import load_checkpoint
 
 import diffsptk
-from Neural_formant_synthesis.functions import root_to_formant
-from Neural_formant_synthesis.feature_extraction import Normaliser
+from .functions import root_to_formant
+from .feature_extraction import Normaliser
+# from Neural_formant_synthesis.functions import root_to_formant
+# from Neural_formant_synthesis.feature_extraction import Normaliser
 
 class NeuralFormant_Envelope(torch.nn.Module):
     """
@@ -270,7 +272,7 @@ class fm_config_obj(object):
     def __init__(self, dict):
         self.type = dict["type"]
         if self.type == "WaveNet":
-            self.model_path = dict["model_path"]
+            self.model_path = dict.get("model_path", None)
             self.n_feat = dict["n_feat"]
             self.n_out = dict["n_out"]
             self.batch_size = dict["batch_size"]
