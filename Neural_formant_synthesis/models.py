@@ -4,6 +4,9 @@ from torchaudio.models import Conformer
 
 from glotnet.model.feedforward.wavenet import WaveNet
 from glotnet.sigproc.levinson import forward_levinson, spectrum_to_allpole
+from glotnet.sigproc.lpc import LinearPredictor
+from glotnet.sigproc.emphasis import Emphasis
+
 
 from hifi_gan.models import Generator
 from hifi_gan.utils import load_checkpoint
@@ -120,6 +123,88 @@ class FM_Hifi_Generator(torch.nn.Module):
         y = self.hifi_generator(x)
 
         return y
+    
+class SourceFilterFormantSynthesisGenerator(torch.nn.Module):
+
+    def __init__(self, fm_config, g_config, pretrained_fm:str = None, freeze_fm:bool = True, device:str = 'cpu'):
+        """
+        fm_config: Config object for feature mapping model:
+        g_config: Config object for HiFi generator.
+        """
+        super().__init__()
+
+        self.fm_config = fm_config
+        self.g_config = g_config
+
+        self.pretrained_fm = pretrained_fm
+
+        self.freeze_fm = freeze_fm
+
+        self.device = device
+
+        self.create_models()
+
+        if self.pretrained_fm is not None:
+            print("Freezing pre-trained feature mapping.")
+            self.load_fm_checkpoint(self.pretrained_fm) 
+            if self.freeze_fm:
+                for param in self.feature_mapping.parameters():
+                    param.requires_grad = False
+
+    def create_models(self):
+
+        self.feature_mapping = WaveNet(
+            input_channels = self.fm_config.n_feat,
+            output_channels = self.fm_config.n_out,
+            residual_channels = self.fm_config.res_channels,
+            skip_channels = self.fm_config.skip_channels,
+            kernel_size = self.fm_config.kernel_size,
+            dilations = self.fm_config.dilations,
+            causal = self.fm_config.causal
+        )
+
+        for p in self.feature_mapping.parameters():
+            if p.dim() >= 2:
+                torch.nn.init.xavier_uniform_(p)
+
+        self.hifi_generator = Generator(h = self.g_config, input_channels = self.fm_config.n_out)
+
+        h = self.g_config
+        self.pre_emphasis = Emphasis(alpha=h.pre_emph_coeff)
+        self.lpc = LinearPredictor(
+            n_fft=h.n_fft,
+            hop_length=h.hop_size,
+            win_length=h.win_size,
+            order=h.allpole_order)
+
+
+    def load_fm_checkpoint(self,checkpoint_file):
+        fm_cp_dict = load_checkpoint(checkpoint_file, device = self.device)
+        self.feature_mapping.load_state_dict(fm_cp_dict["model_state_dict"])
+
+    def load_generator_checkpoint(self,checkpoint_file):
+        generator_state_dict = load_checkpoint(checkpoint_file, device = self.device)
+        self.hifi_generator.load_state_dict(generator_state_dict['generator'])
+
+    def forward(self, input_features):
+        
+        x = self.feature_mapping(input_features)
+
+        order = self.g_config["allpole_order"]
+        x_mel = x[:, order:, :]
+        x_lars = x[:, :order, :]
+        x_rcoef = torch.tanh(0.5 * x_lars)
+
+        allpole = torch.transpose(forward_levinson(torch.transpose(x_rcoef,1,2)), 1,2)
+
+        gan_input = torch.cat([x_mel, x_rcoef], dim=1)
+
+        excitation = self.hifi_generator(gan_input)
+
+        # apply synthesis filter
+        y = self.lpc.synthesis_filter(excitation, allpole)
+
+        return y, allpole, x_mel
     
 class Envelope_wavenet(torch.nn.Module):
     """
