@@ -159,70 +159,74 @@ def train(rank, a, h, fm_h):
             y = y.unsqueeze(1)
 
             y_emph = generator.pre_emphasis.emphasis(y)
-            y_emph = y_emph + 1e-5 * torch.randn_like(y_emph) # white noise correction
-            allpole_y = generator.lpc.estimate(y_emph[:, 0, :])
+            _, _, env_fft_y = generator.lpc.estimate(y_emph[:, 0, :], root_scale=0.96)
             # trim extra frame(s)
-            allpole_y = allpole_y[..., :y_mel.size(-1)]
-
+            n_frames = y_mel.size(-1)
+            env_fft_y = env_fft_y[..., :n_frames]
 
             x_feat = x[:,0:9,:]
 
-            y_g_hat, allpole, mel_cond = generator(x_feat)
+            feature_map_only = steps < fm_h.get('pre_train_steps', 0)
+            if feature_map_only:
+                env_fft_x, mel_cond = generator(x_feat, feature_map_only)
+            else:
+                y_g_hat, env_fft_x, mel_cond = generator(x_feat)
+
+            # env_fft_x = torch.fft.rfft(allpole, n=512, dim=1).abs()
+            # env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
 
 
-            env_fft_x = torch.fft.rfft(allpole, n=512, dim=1).abs()
-            env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
+            if not feature_map_only:
+                y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft,
+                                            h.num_mels, h.sampling_rate,
+                                            h.hop_size, h.win_size,
+                                            h.fmin, h.fmax_for_loss)
 
-            envelope_loss_log_domain = getattr(fm_h, 'envelope_loss_log_domain', True)
-            if envelope_loss_log_domain:
-                env_fft_x = torch.log(env_fft_x + 1e-6)
-                env_fft_y = torch.log(env_fft_y + 1e-6)
+                optim_d.zero_grad()
 
-            y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft,
-                                          h.num_mels, h.sampling_rate,
-                                          h.hop_size, h.win_size,
-                                          h.fmin, h.fmax_for_loss)
+                # MPD
+                y_df_hat_r, y_df_hat_g, _, _ = mpd(y, y_g_hat.detach())
 
-            optim_d.zero_grad()
+                loss_disc_f, losses_disc_f_r, losses_disc_f_g = discriminator_loss(y_df_hat_r, y_df_hat_g)
 
-            # MPD
-            y_df_hat_r, y_df_hat_g, _, _ = mpd(y, y_g_hat.detach())
+                # MSD
+                y_ds_hat_r, y_ds_hat_g, _, _ = msd(y, y_g_hat.detach())
 
-            loss_disc_f, losses_disc_f_r, losses_disc_f_g = discriminator_loss(y_df_hat_r, y_df_hat_g)
+                loss_disc_s, losses_disc_s_r, losses_disc_s_g = discriminator_loss(y_ds_hat_r, y_ds_hat_g)
 
-            # MSD
-            y_ds_hat_r, y_ds_hat_g, _, _ = msd(y, y_g_hat.detach())
+                loss_disc_all = loss_disc_s + loss_disc_f
 
-            loss_disc_s, losses_disc_s_r, losses_disc_s_g = discriminator_loss(y_ds_hat_r, y_ds_hat_g)
-
-            loss_disc_all = loss_disc_s + loss_disc_f
-
-            loss_disc_all.backward()
-            optim_d.step()
+                loss_disc_all.backward()
+                optim_d.step()
 
             # Generator
             optim_g.zero_grad()
+            loss_gen_all = 0.0
 
-            # TODO:
-            # 1) match predicted envelope to ground truth LPC estimate
-            # 2) match generated signal LPC estimate to ground truth LPC estimate
+            if not feature_map_only:
+                # L1 Mel-Spectrogram Loss
+                loss_mel = F.l1_loss(y_mel, y_g_hat_mel) * 45
 
-            # L1 Mel-Spectrogram Loss
-            loss_mel = F.l1_loss(y_mel, y_g_hat_mel) * 45
-
-            loss_env_l2 = (env_fft_x - env_fft_y).pow(2).mean()
-            loss_env_l1 = (env_fft_x - env_fft_y).abs().mean()
+                # Adversarial losses
+                y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mpd(y, y_g_hat)
+                y_ds_hat_r, y_ds_hat_g, fmap_s_r, fmap_s_g = msd(y, y_g_hat)
+                loss_fm_f = feature_loss(fmap_f_r, fmap_f_g)
+                loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
+                loss_gen_f, losses_gen_f = generator_adversarial_loss(y_df_hat_g)
+                loss_gen_s, losses_gen_s = generator_adversarial_loss(y_ds_hat_g)
+                loss_gen_all = loss_gen_all + loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
 
             loss_mel_fm = F.l1_loss(y_mel, mel_cond)
 
-            y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mpd(y, y_g_hat)
-            y_ds_hat_r, y_ds_hat_g, fmap_s_r, fmap_s_g = msd(y, y_g_hat)
-            loss_fm_f = feature_loss(fmap_f_r, fmap_f_g)
-            loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
-            loss_gen_f, losses_gen_f = generator_adversarial_loss(y_df_hat_g)
-            loss_gen_s, losses_gen_s = generator_adversarial_loss(y_ds_hat_g)
-            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
-
+            envelope_loss_log_domain = fm_h.get('envelope_loss_log_domain', True)
+            env_fft_log_x = torch.log(env_fft_x + 1e-6)
+            env_fft_log_y = torch.log(env_fft_y + 1e-6)
+            if envelope_loss_log_domain:
+                loss_env_l2 = (env_fft_log_x - env_fft_log_y).pow(2).mean()
+                loss_env_l1 = (env_fft_log_x - env_fft_log_y).abs().mean()
+            else:
+                loss_env_l2 = (env_fft_x - env_fft_y).pow(2).mean()
+                loss_env_l1 = (env_fft_x - env_fft_y).abs().mean()
             envelope_loss_l1_weight = getattr(fm_h, 'envelope_loss_l1_weight', 0.0)
             if envelope_loss_l1_weight > 0.0:
                 loss_gen_all = loss_gen_all + envelope_loss_l1_weight * loss_env_l1
@@ -241,10 +245,14 @@ def train(rank, a, h, fm_h):
             if rank == 0:
                 # STDOUT logging
                 if steps % a.stdout_interval == 0:
-                    with torch.no_grad():
-                        mel_error = F.l1_loss(y_mel, y_g_hat_mel).item()
 
-                    print('Steps : {:d}, Gen Loss Total : {:4.3f}, Mel-Spec. Error : {:4.3f}, s/b : {:4.3f}'.
+                    if feature_map_only:
+                        print('Steps : {:d}, Gen Loss Total : {:4.3f}, s/b : {:4.3f}'.
+                          format(steps, loss_gen_all, time.time() - start_b))
+                    else:
+                        with torch.no_grad():
+                            mel_error = F.l1_loss(y_mel, y_g_hat_mel).item()
+                        print('Steps : {:d}, Gen Loss Total : {:4.3f}, Mel-Spec. Error : {:4.3f}, s/b : {:4.3f}'.
                           format(steps, loss_gen_all, mel_error, time.time() - start_b))
 
                 # checkpointing
@@ -264,39 +272,61 @@ def train(rank, a, h, fm_h):
                 # Tensorboard summary logging
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
-                    sw.add_scalar("training/mel_spec_error", mel_error, steps)
+
                     sw.add_scalar("training/envelope_l2_loss", loss_env_l2, steps)
                     sw.add_scalar("training/envelope_l1_loss", loss_env_l1, steps)
                     sw.add_scalar("training/feature_mapping_mel_loss", loss_mel_fm, steps)
-                    # Framed Discriminator losses
-                    sw.add_scalar("training_gan/disc_f_r", sum(losses_disc_f_r), steps)
-                    sw.add_scalar("training_gan/disc_f_g", sum(losses_disc_f_g), steps)
-                    # Multiscale Discriminator losses
-                    sw.add_scalar("training_gan/disc_s_r", sum(losses_disc_s_r), steps)
-                    sw.add_scalar("training_gan/disc_s_g", sum(losses_disc_s_g), steps)
-                    # Framed Generator losses
-                    sw.add_scalar("training_gan/gen_f", sum(losses_gen_f), steps)
-                    # Multiscale Generator losses
-                    sw.add_scalar("training_gan/gen_s", sum(losses_gen_s), steps)
-                    # Feature Matching losses
-                    sw.add_scalar("training_gan/loss_fm_f", loss_fm_f, steps)
-                    sw.add_scalar("training_gan/loss_fm_s", loss_fm_s, steps)
+
+                    if not feature_map_only:
+                        sw.add_scalar("training/mel_spec_error", mel_error, steps)
+
+                        # Framed Discriminator losses
+                        sw.add_scalar("training_gan/disc_f_r", sum(losses_disc_f_r), steps)
+                        sw.add_scalar("training_gan/disc_f_g", sum(losses_disc_f_g), steps)
+                        # Multiscale Discriminator losses
+                        sw.add_scalar("training_gan/disc_s_r", sum(losses_disc_s_r), steps)
+                        sw.add_scalar("training_gan/disc_s_g", sum(losses_disc_s_g), steps)
+                        # Framed Generator losses
+                        sw.add_scalar("training_gan/gen_f", sum(losses_gen_f), steps)
+                        # Multiscale Generator losses
+                        sw.add_scalar("training_gan/gen_s", sum(losses_gen_s), steps)
+                        # Feature Matching losses
+                        sw.add_scalar("training_gan/loss_fm_f", loss_fm_f, steps)
+                        sw.add_scalar("training_gan/loss_fm_s", loss_fm_s, steps)
 
 
                 # Validation
-                if steps % a.validation_interval == 0:  # and steps != 0:
+                if steps % a.validation_interval == 0 : #  and steps != 0:
+
+                    print(f"Validation at step {steps}")
                     generator.eval()
                     torch.cuda.empty_cache()
                     val_err_tot = 0
+                    max_valid_batches = 100
                     with torch.no_grad():
                         for j, batch in enumerate(validation_loader):
+
+                            if j > max_valid_batches:
+                                break
+
                             x, _, y, y_mel = batch
 
                             x = x.to(device)
 
                             x_feat = x[:,0:9,:]
 
-                            y_g_hat, allpole, mel_cond = generator(x_feat)
+                            y_g_hat, env_fft_x, mel_cond = generator(x_feat)
+
+                            y = y.to(device)
+                            y = y.unsqueeze(1)
+                            y_emph = generator.pre_emphasis.emphasis(y)
+                            _, _, env_fft_y = generator.lpc.estimate(y_emph[:, 0, :], root_scale=0.96)
+                            # trim extra frame(s)
+                            n_frames = y_mel.size(-1)
+                            env_fft_y = env_fft_y[..., :n_frames]
+
+                            env_fft_log_x = torch.log(env_fft_x + 1e-6)
+                            env_fft_log_y = torch.log(env_fft_y + 1e-6)
 
                             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
                             y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate,
@@ -311,6 +341,7 @@ def train(rank, a, h, fm_h):
                                 if steps == 0:
                                     sw.add_audio('gt/y_{}'.format(j), y[0], steps, h.sampling_rate)
                                     sw.add_figure('gt/y_spec_{}'.format(j), plot_spectrogram(y_mel[0].cpu()), steps)
+                                    sw.add_figure('gt/y_env_spec_{}'.format(j), plot_spectrogram(env_fft_log_y[0].cpu()), steps)
 
                                 sw.add_audio('generated/y_hat_{}'.format(j), y_g_hat[0], steps, h.sampling_rate)
                                 y_hat_spec = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels,
@@ -318,6 +349,8 @@ def train(rank, a, h, fm_h):
                                                              h.fmin, h.fmax)
                                 sw.add_figure('generated/y_hat_spec_{}'.format(j),
                                               plot_spectrogram(y_hat_spec.squeeze(0).cpu().numpy()), steps)
+                                sw.add_figure('generated/y_hat_env_spec_{}'.format(j),
+                                              plot_spectrogram(env_fft_log_x[0].detach().cpu()), steps)
 
                         val_err = val_err_tot / (j+1)
                         sw.add_scalar("validation/mel_spec_error", val_err, steps)
