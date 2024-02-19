@@ -68,6 +68,13 @@ def train(rank, a, h, fm_h, env_h):
             order=h.allpole_order)
     generator.env_estim = env_estim
 
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print(f"Num parameters in HiFi Generator: {count_parameters(generator.hifi_generator)}")
+    print(f"Num parameters in Feature Mapping model: {count_parameters(generator.feature_mapping)}")
+    print(f"Num parameters in Envelope Estimator: {count_parameters(generator.env_estim)}")
+
     env_estim.to(device)
     generator = generator.to(device)
     mpd = MultiPeriodDiscriminator().to(device)
@@ -82,7 +89,6 @@ def train(rank, a, h, fm_h, env_h):
         cp_g = scan_checkpoint(a.checkpoint_path, 'g_')
         cp_do = scan_checkpoint(a.checkpoint_path, 'do_')
 
-    import ipdb; ipdb.set_trace()
     steps = 0
     if cp_g is None or cp_do is None:
         state_dict_do = None
@@ -168,27 +174,28 @@ def train(rank, a, h, fm_h, env_h):
             y = y.unsqueeze(1)
 
             y_emph = generator.pre_emphasis.emphasis(y)
+            y_emph = y_emph + 1e-5 * torch.randn_like(y_emph) # white noise correction
             allpole_y = generator.lpc.estimate(y_emph[:, 0, :])
             # trim extra frame(s)
             allpole_y = allpole_y[..., :y_mel.size(-1)]
 
-            env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
 
             x_feat = x[:,0:9,:]
             # y_env = x[:,9:,:] # Envelope is estimated with model
 
             x_env = env_estim(x_feat)
 
-            x = torch.cat((x_feat, x_env), dim = -2)
 
             allpole = torch.transpose(forward_levinson(torch.transpose(x_env,1,2)), 1,2)
 
             # TODO: set order to 30, not 31!
             env_fft_x = torch.fft.rfft(allpole, n=512, dim=1).abs()
+            env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
 
             env_fft_x_log = torch.log(env_fft_x + 1e-6)
             env_fft_y_log = torch.log(env_fft_y + 1e-6)
 
+            x = torch.cat((x_feat, x_env), dim = -2)
             # generate excitation
             e_g_hat = generator(x)
             # apply synthesis filter
@@ -226,7 +233,8 @@ def train(rank, a, h, fm_h, env_h):
             # L1 Mel-Spectrogram Loss
             loss_mel = F.l1_loss(y_mel, y_g_hat_mel) * 45
 
-            loss_env_l2 = (env_fft_x_log - env_fft_y_log).pow(2).mean()    
+            loss_env_l2 = (env_fft_x_log - env_fft_y_log).pow(2).mean()
+            loss_env_l1 = (env_fft_x_log - env_fft_y_log).abs().mean()
 
             y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mpd(y, y_g_hat)
             y_ds_hat_r, y_ds_hat_g, fmap_s_r, fmap_s_g = msd(y, y_g_hat)
@@ -234,10 +242,20 @@ def train(rank, a, h, fm_h, env_h):
             loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
             loss_gen_f, losses_gen_f = generator_adversarial_loss(y_df_hat_g)
             loss_gen_s, losses_gen_s = generator_adversarial_loss(y_ds_hat_g)
-            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel + loss_env_l2
+            loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
+
+            envelope_loss_l1_weight = getattr(fm_h, 'envelope_loss_l1_weight', 0.0)
+            if envelope_loss_l1_weight > 0.0:
+                loss_gen_all = loss_gen_all + envelope_loss_l1_weight * loss_env_l1
+            envelope_loss_l2_weight = getattr(fm_h, 'envelope_loss_l2_weight', 0.0)
+            if a.envelope_loss_l2_weight > 0.0:
+                loss_gen_all = loss_gen_all + envelope_loss_l2_weight * loss_env_l2
 
             loss_gen_all.backward()
             optim_g.step()
+
+            if not torch.isfinite(loss_gen_all):
+                raise ValueError(f"Loss value is not finite, was {loss_gen_all}")
 
             if rank == 0:
                 # STDOUT logging
@@ -267,6 +285,7 @@ def train(rank, a, h, fm_h, env_h):
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
                     sw.add_scalar("training/mel_spec_error", mel_error, steps)
                     sw.add_scalar("training/envelope_l2_loss", loss_env_l2, steps)
+                    sw.add_scalar("training/envelope_l1_loss", loss_env_l1, steps)
                     # Framed Discriminator losses
                     sw.add_scalar("training_gan/disc_f_r", sum(losses_disc_f_r), steps)
                     sw.add_scalar("training_gan/disc_f_g", sum(losses_disc_f_g), steps)
