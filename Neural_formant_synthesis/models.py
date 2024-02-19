@@ -3,9 +3,11 @@ import torch
 from torchaudio.models import Conformer
 
 from glotnet.model.feedforward.wavenet import WaveNet
-from glotnet.sigproc.levinson import forward_levinson, spectrum_to_allpole
-from glotnet.sigproc.lpc import LinearPredictor
 from glotnet.sigproc.emphasis import Emphasis
+
+from .sigproc.levinson import forward_levinson, spectrum_to_allpole
+from .sigproc.lpc import LinearPredictor
+
 
 
 from hifi_gan.models import Generator
@@ -142,6 +144,10 @@ class SourceFilterFormantSynthesisGenerator(torch.nn.Module):
 
         self.device = device
 
+        self.allpole_order = self.g_config['allpole_order']
+        self.num_mels = self.g_config['num_mels']
+        self.noise_channels = self.fm_config.get('output_noise_channels', 0)
+
         self.create_models()
 
         if self.pretrained_fm is not None:
@@ -186,25 +192,39 @@ class SourceFilterFormantSynthesisGenerator(torch.nn.Module):
         generator_state_dict = load_checkpoint(checkpoint_file, device = self.device)
         self.hifi_generator.load_state_dict(generator_state_dict['generator'])
 
-    def forward(self, input_features):
-        
+    def forward(self, input_features, feature_map_only = False):
+
         x = self.feature_mapping(input_features)
 
-        order = self.g_config["allpole_order"]
-        x_mel = x[:, order:, :]
-        x_lars = x[:, :order, :]
+        x_allpole, x_mel, x_noise = torch.split(x, (self.allpole_order+1, self.num_mels, self.noise_channels), dim=1)
+
+        x_lars, x_gain = torch.split(x_allpole, (self.allpole_order, 1), dim=1)
+        gain_lin = torch.exp(x_gain + 1e-5)
         x_rcoef = torch.tanh(0.5 * x_lars)
 
         allpole = torch.transpose(forward_levinson(torch.transpose(x_rcoef,1,2)), 1,2)
 
-        gan_input = torch.cat([x_mel, x_rcoef], dim=1)
+        A = torch.fft.rfft(allpole, n=512, dim=1).abs()
+        H = gain_lin / (A + 1e-6)
+        # H = 1 / (A + 1e-6)
+
+        if feature_map_only:
+            return H, x_mel
+
+        # s = torch.exp(torch.clamp(x_noise, min=-7.0, max=0.0))
+        s = torch.sigmoid(x_noise)
+        x_noise = s * torch.randn_like(x_noise)
+
+        # gan_input = torch.cat([x_mel, x_allpole, x_noise], dim=1)
+        gan_input = torch.cat([x_mel, x_rcoef, x_gain, x_noise], dim=1)
+
+        # y = self.hifi_generator(gan_input)
 
         excitation = self.hifi_generator(gan_input)
-
         # apply synthesis filter
-        y = self.lpc.synthesis_filter(excitation, allpole)
+        y = self.lpc.synthesis_filter(excitation, allpole, gain_lin)
 
-        return y, allpole, x_mel
+        return y, H, x_mel
     
 class Envelope_wavenet(torch.nn.Module):
     """
