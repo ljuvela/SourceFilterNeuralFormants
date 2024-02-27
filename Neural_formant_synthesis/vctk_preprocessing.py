@@ -79,6 +79,18 @@ def divide_vctk(vctk_path, target_dir, file_ext = '.wav'):
     print("Dividing Speakers")
 
     # Copy audio files in each speaker directory to train, validation and test directories
+
+    print("Processing Test Set")
+    testfile = open(os.path.join(target_dir, "test_files.txt"), 'w')
+    for speaker in tqdm(test_speakers,total = len(test_speakers)):
+        speaker_dir = os.path.join(vctk_path, speaker)
+        speaker_files = glob.glob(os.path.join(speaker_dir, '*' + file_ext))
+        for file in speaker_files:
+            os.system('cp ' + file + ' ' + test_dir)
+        testfile.writelines([str(i)+'\n' for i in speaker_files])
+    testfile.close()
+
+    print("Processing Training Set")
     trainfile = open(os.path.join(target_dir, "train_files.txt"), 'w')
     for speaker in tqdm(train_speakers, total = len(train_speakers)):
         speaker_dir = os.path.join(vctk_path, speaker)
@@ -88,6 +100,7 @@ def divide_vctk(vctk_path, target_dir, file_ext = '.wav'):
         trainfile.writelines([str(i)+'\n' for i in speaker_files])
     trainfile.close()
 
+    print("Processing Validation Set")
     valfile = open(os.path.join(target_dir, "val_files.txt"), 'w')
     for speaker in tqdm(val_speakers, total = len(val_speakers)):
         speaker_dir = os.path.join(vctk_path, speaker)
@@ -97,14 +110,7 @@ def divide_vctk(vctk_path, target_dir, file_ext = '.wav'):
         valfile.writelines([str(i)+'\n' for i in speaker_files])
     valfile.close()
 
-    testfile = open(os.path.join(target_dir, "test_files.txt"), 'w')
-    for speaker in tqdm(test_speakers,total = len(test_speakers)):
-        speaker_dir = os.path.join(vctk_path, speaker)
-        speaker_files = glob.glob(os.path.join(speaker_dir, '*' + file_ext))
-        for file in speaker_files:
-            os.system('cp ' + file + ' ' + test_dir)
-        testfile.writelines([str(i)+'\n' for i in speaker_files])
-    testfile.close()
+
 
 
 def process_directory(path, target_sr, feature_extractor, median_filter, pre_emphasis = None, file_ext = '.wav'):
