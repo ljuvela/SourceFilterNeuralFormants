@@ -26,7 +26,8 @@ from glotnet.sigproc.emphasis import Emphasis
 
 from Neural_formant_synthesis.Dataset import FeatureDataset_List
 from Neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet, Envelope_conformer
-from Neural_formant_synthesis.models import SourceFilterFormantSynthesisGenerator
+from Neural_formant_synthesis.models import NeuralFormantSynthesisGenerator
+
 
 from glotnet.sigproc.levinson import forward_levinson
 
@@ -50,7 +51,7 @@ def train(rank, a, h, fm_h):
 
     # HiFi generator included in feature mapping class.
     pretrained_fm = getattr(fm_h, 'model_path', None)
-    generator = SourceFilterFormantSynthesisGenerator(fm_config = fm_h, g_config = h,
+    generator = NeuralFormantSynthesisGenerator(fm_config = fm_h, g_config = h,
                                   pretrained_fm = pretrained_fm,
                                   freeze_fm = pretrained_fm is not None, 
                                   device = device)
@@ -74,6 +75,7 @@ def train(rank, a, h, fm_h):
         cp_g = scan_checkpoint(a.checkpoint_path, 'g_')
         cp_do = scan_checkpoint(a.checkpoint_path, 'do_')
 
+    pretrain_steps = 0 # always reset, never load
     steps = 0
     if cp_g is None or cp_do is None:
         state_dict_do = None
@@ -101,7 +103,6 @@ def train(rank, a, h, fm_h):
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=h.lr_decay, last_epoch=last_epoch)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=h.lr_decay, last_epoch=last_epoch)
-
 
     training_path = os.path.join(a.input_wavs_dir, 'train')
     trainset = FeatureDataset_List(training_path, h, sampling_rate = h.sampling_rate, 
@@ -158,22 +159,16 @@ def train(rank, a, h, fm_h):
             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
             y = y.unsqueeze(1)
 
-            y_emph = generator.pre_emphasis.emphasis(y)
-            _, _, env_fft_y = generator.lpc.estimate(y_emph[:, 0, :], root_scale=0.96)
-            # trim extra frame(s)
-            n_frames = y_mel.size(-1)
-            env_fft_y = env_fft_y[..., :n_frames]
-
             x_feat = x[:,0:9,:]
 
+            # feature_map_only = pretrain_steps < fm_h.get('pre_train_steps', 0)
             feature_map_only = steps < fm_h.get('pre_train_steps', 0)
+            detach = fm_h.get('detach_feature_map_from_gan', False)
             if feature_map_only:
-                env_fft_x, mel_cond = generator(x_feat, feature_map_only)
+                mel_cond = generator.forward(x_feat, feature_map_only, detach)
             else:
-                y_g_hat, env_fft_x, mel_cond = generator(x_feat)
+                y_g_hat, mel_cond = generator.forward(x_feat, feature_map_only, detach)
 
-            # env_fft_x = torch.fft.rfft(allpole, n=512, dim=1).abs()
-            # env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
 
 
             if not feature_map_only:
@@ -218,22 +213,6 @@ def train(rank, a, h, fm_h):
 
             loss_mel_fm = F.l1_loss(y_mel, mel_cond)
 
-            envelope_loss_log_domain = fm_h.get('envelope_loss_log_domain', True)
-            env_fft_log_x = torch.log(env_fft_x + 1e-6)
-            env_fft_log_y = torch.log(env_fft_y + 1e-6)
-            if envelope_loss_log_domain:
-                loss_env_l2 = (env_fft_log_x - env_fft_log_y).pow(2).mean()
-                loss_env_l1 = (env_fft_log_x - env_fft_log_y).abs().mean()
-            else:
-                loss_env_l2 = (env_fft_x - env_fft_y).pow(2).mean()
-                loss_env_l1 = (env_fft_x - env_fft_y).abs().mean()
-            envelope_loss_l1_weight = getattr(fm_h, 'envelope_loss_l1_weight', 0.0)
-            if envelope_loss_l1_weight > 0.0:
-                loss_gen_all = loss_gen_all + envelope_loss_l1_weight * loss_env_l1
-            envelope_loss_l2_weight = getattr(fm_h, 'envelope_loss_l2_weight', 0.0)
-            if envelope_loss_l2_weight > 0.0:
-                loss_gen_all = loss_gen_all + envelope_loss_l2_weight * loss_env_l2
-
             loss_gen_all = loss_gen_all + loss_mel_fm
 
             loss_gen_all.backward()
@@ -273,8 +252,6 @@ def train(rank, a, h, fm_h):
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
 
-                    sw.add_scalar("training/envelope_l2_loss", loss_env_l2, steps)
-                    sw.add_scalar("training/envelope_l1_loss", loss_env_l1, steps)
                     sw.add_scalar("training/feature_mapping_mel_loss", loss_mel_fm, steps)
 
                     if not feature_map_only:
@@ -296,7 +273,7 @@ def train(rank, a, h, fm_h):
 
 
                 # Validation
-                if steps % a.validation_interval == 0:
+                if steps % a.validation_interval == 0: #and steps != 0:
 
                     print(f"Validation at step {steps}")
                     generator.eval()
@@ -315,18 +292,7 @@ def train(rank, a, h, fm_h):
 
                             x_feat = x[:,0:9,:]
 
-                            y_g_hat, env_fft_x, mel_cond = generator(x_feat)
-
-                            y = y.to(device)
-                            y = y.unsqueeze(1)
-                            y_emph = generator.pre_emphasis.emphasis(y)
-                            _, _, env_fft_y = generator.lpc.estimate(y_emph[:, 0, :], root_scale=0.96)
-                            # trim extra frame(s)
-                            n_frames = y_mel.size(-1)
-                            env_fft_y = env_fft_y[..., :n_frames]
-
-                            env_fft_log_x = torch.log(env_fft_x + 1e-6)
-                            env_fft_log_y = torch.log(env_fft_y + 1e-6)
+                            y_g_hat, mel_cond = generator(x_feat)
 
                             y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
                             y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate,
@@ -341,7 +307,6 @@ def train(rank, a, h, fm_h):
                                 if steps == 0:
                                     sw.add_audio('gt/y_{}'.format(j), y[0], steps, h.sampling_rate)
                                     sw.add_figure('gt/y_spec_{}'.format(j), plot_spectrogram(y_mel[0].cpu()), steps)
-                                    sw.add_figure('gt/y_env_spec_{}'.format(j), plot_spectrogram(env_fft_log_y[0].cpu()), steps)
 
                                 sw.add_audio('generated/y_hat_{}'.format(j), y_g_hat[0], steps, h.sampling_rate)
                                 y_hat_spec = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels,
@@ -349,8 +314,6 @@ def train(rank, a, h, fm_h):
                                                              h.fmin, h.fmax)
                                 sw.add_figure('generated/y_hat_spec_{}'.format(j),
                                               plot_spectrogram(y_hat_spec.squeeze(0).cpu().numpy()), steps)
-                                sw.add_figure('generated/y_hat_env_spec_{}'.format(j),
-                                              plot_spectrogram(env_fft_log_x[0].detach().cpu()), steps)
 
                         val_err = val_err_tot / (j+1)
                         sw.add_scalar("validation/mel_spec_error", val_err, steps)
@@ -358,6 +321,7 @@ def train(rank, a, h, fm_h):
                     generator.train()
 
             steps += 1
+            pretrain_steps += 1
 
         scheduler_g.step()
         scheduler_d.step()

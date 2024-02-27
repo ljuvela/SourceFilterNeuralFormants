@@ -192,6 +192,10 @@ class SourceFilterFormantSynthesisGenerator(torch.nn.Module):
         generator_state_dict = load_checkpoint(checkpoint_file, device = self.device)
         self.hifi_generator.load_state_dict(generator_state_dict['generator'])
 
+    def load_generator_e2e_checkpoint(self,checkpoint_file):
+        generator_state_dict = load_checkpoint(checkpoint_file, device = self.device)
+        self.load_state_dict(generator_state_dict['generator'])
+
     def forward(self, input_features, feature_map_only = False):
 
         x = self.feature_mapping(input_features)
@@ -522,3 +526,81 @@ class CycleConsistency(torch.nn.Module):
         
 
         return formants
+    
+
+ 
+class NeuralFormantSynthesisGenerator(torch.nn.Module):
+
+    def __init__(self, fm_config, g_config, pretrained_fm:str = None, freeze_fm:bool = True, device:str = 'cpu'):
+        """
+        fm_config: Config object for feature mapping model:
+        g_config: Config object for HiFi generator.
+        """
+        super().__init__()
+
+        self.fm_config = fm_config
+        self.g_config = g_config
+
+        self.pretrained_fm = pretrained_fm
+
+        self.freeze_fm = freeze_fm
+
+        self.device = device
+
+        self.num_mels = self.g_config['num_mels']
+
+        self.create_models()
+
+        if self.pretrained_fm is not None:
+            print("Freezing pre-trained feature mapping.")
+            self.load_fm_checkpoint(self.pretrained_fm) 
+            if self.freeze_fm:
+                for param in self.feature_mapping.parameters():
+                    param.requires_grad = False
+
+    def create_models(self):
+
+        self.feature_mapping = WaveNet(
+            input_channels = self.fm_config.n_feat,
+            output_channels = self.fm_config.n_out,
+            residual_channels = self.fm_config.res_channels,
+            skip_channels = self.fm_config.skip_channels,
+            kernel_size = self.fm_config.kernel_size,
+            dilations = self.fm_config.dilations,
+            causal = self.fm_config.causal
+        )
+
+        for p in self.feature_mapping.parameters():
+            if p.dim() >= 2:
+                torch.nn.init.xavier_uniform_(p)
+
+        self.hifi_generator = Generator(h = self.g_config, input_channels = self.fm_config.n_out)
+
+
+    def load_fm_checkpoint(self,checkpoint_file):
+        fm_cp_dict = load_checkpoint(checkpoint_file, device = self.device)
+        self.feature_mapping.load_state_dict(fm_cp_dict["model_state_dict"])
+
+    def load_generator_checkpoint(self,checkpoint_file):
+        generator_state_dict = load_checkpoint(checkpoint_file, device = self.device)
+        self.hifi_generator.load_state_dict(generator_state_dict['generator'])
+
+    def load_generator_e2e_checkpoint(self,checkpoint_file):
+        generator_state_dict = load_checkpoint(checkpoint_file, device = self.device)
+        self.load_state_dict(generator_state_dict['generator'])
+
+    def forward(self, input_features, feature_map_only=False, detach_feature_map=False):
+
+        x = self.feature_mapping(input_features)
+
+        if feature_map_only:
+            return x
+        
+        gen_input = x
+        if detach_feature_map:
+            gen_input = gen_input.detach()
+
+        y = self.hifi_generator(gen_input)
+ 
+        return y, x
+    
