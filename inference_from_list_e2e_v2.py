@@ -180,7 +180,7 @@ def main():
         raise ValueError('Input arguments should include either input_path or file_list')
 
     if not os.path.exists(a.output_path):
-        os.mkdir(a.output_path)
+        os.makedirs(a.output_path, exist_ok=True)
 
     scale_list = str_to_list(a.feature_scale)
     if len(scale_list) != 5:
