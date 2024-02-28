@@ -142,7 +142,6 @@ def str_to_list(in_str):
     return list(map(float, in_str.strip('[]').split(',')))
 
 def main():
-    print('Initializing Training Process..')
 
     parser = argparse.ArgumentParser()
 
