@@ -17,7 +17,6 @@ from hifi_gan.env import AttrDict, build_env
 from hifi_gan.meldataset import mel_spectrogram
 from hifi_gan.models import MultiPeriodDiscriminator, MultiScaleDiscriminator, feature_loss, generator_adversarial_loss,\
     discriminator_loss
-#from hifi_gan.models import discriminator_metrics
 from hifi_gan.utils import plot_spectrogram, scan_checkpoint, load_checkpoint, save_checkpoint
 
 
@@ -134,9 +133,6 @@ def train(rank, a, h, fm_h):
     mpd.train()
     msd.train()
 
-    # generator = torch.compile(generator)
-    # mpd = torch.compile(mpd)
-    # msd = torch.compile(msd)
     for epoch in range(max(0, last_epoch), a.training_epochs):
 
         if rank == 0:
@@ -172,8 +168,6 @@ def train(rank, a, h, fm_h):
             else:
                 y_g_hat, env_fft_x, mel_cond = generator(x_feat)
 
-            # env_fft_x = torch.fft.rfft(allpole, n=512, dim=1).abs()
-            # env_fft_y = torch.fft.rfft(allpole_y, n=512, dim=1).abs()
 
 
             if not feature_map_only:
