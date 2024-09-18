@@ -4,18 +4,20 @@ import os
 import argparse
 import json
 import torch
-from hifi_gan.env import AttrDict, build_env
-#from hifi_gan.models import discriminator_metrics
-from hifi_gan.utils import scan_checkpoint
+from neural_formant_synthesis.third_party.hifi_gan.env import AttrDict, build_env
+#from neural_formant_synthesis.third_party.hifi_gan.models import discriminator_metrics
+from neural_formant_synthesis.third_party.hifi_gan.utils import scan_checkpoint
 
 
-from glotnet.sigproc.lpc import LinearPredictor
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.sigproc.lpc import LinearPredictor
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
-from Neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet,  Envelope_conformer
-from Neural_formant_synthesis.feature_extraction import feature_extractor, Normaliser, MedianPool1d
+from neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet,  Envelope_conformer
+from neural_formant_synthesis.feature_extraction import feature_extractor, Normaliser, MedianPool1d
+from neural_formant_synthesis.models import SourceFilterFormantSynthesisGenerator
 
-from glotnet.sigproc.levinson import forward_levinson
+
+from neural_formant_synthesis.glotnet.sigproc.levinson import forward_levinson
 
 import torchaudio as ta
 import pandas as pd
@@ -26,7 +28,7 @@ from glob import glob
 torch.backends.cudnn.benchmark = True
 
 
-def generate_wave_list(file_list, scale_list, a, h, fm_h, env_h):
+def generate_wave_list(file_list, scale_list, a, h, fm_h):
 
     torch.cuda.manual_seed(h.seed)
     if torch.cuda.is_available():
@@ -43,36 +45,27 @@ def generate_wave_list(file_list, scale_list, a, h, fm_h, env_h):
     pre_emphasis_cpu = Emphasis(alpha = h.pre_emph_coeff)
 
     normalise_features = Normaliser(target_sr)
+
+    generator = SourceFilterFormantSynthesisGenerator(
+        fm_config=fm_h,
+        g_config=h,
+        pretrained_fm=None,
+        freeze_fm=False,
+        device=device)
+
     
-    if env_h.type == "WaveNet":
-        env_estim = Envelope_wavenet(config = env_h, use_pretrained = True, freeze_weights = True, device = device)
-    elif env_h.type == "Conformer":
-        env_estim = Envelope_conformer(config = env_h, device = device, pre_trained = env_h.model_path, freeze_weights=True)
-    generator = FM_Hifi_Generator(fm_config = fm_h, g_config = h, pretrained_fm = fm_h.model_path, freeze_fm = True, device = device)
-    generator.pre_emphasis = Emphasis(alpha=h.pre_emph_coeff).to(device)
-    generator.lpc = LinearPredictor(
-            n_fft=h.n_fft,
-            hop_length=h.hop_size,
-            win_length=h.win_size,
-            order=h.allpole_order)
-
-    env_estim.to(device)
-    generator = generator.to(device)
-
     print("checkpoints directory : ", a.checkpoint_path)
 
     if os.path.isdir(a.checkpoint_path):
         cp_g = scan_checkpoint(a.checkpoint_path, 'g_')
 
 
-    generator.load_generator_checkpoint(cp_g)
+    generator.load_generator_e2e_checkpoint(cp_g)
 
-    env_estim.eval()
+    generator = generator.to(device)
+
     generator.eval()
 
-    # generator = torch.compile(generator)
-    # mpd = torch.compile(mpd)
-    # msd = torch.compile(msd)
             
     # Read files from list
     for file in tqdm(file_list, total = len(file_list)):
@@ -111,7 +104,7 @@ def generate_wave_list(file_list, scale_list, a, h, fm_h, env_h):
         #pitch = pitch * scale_list[0]
         for i in range(voicing_flag.size(0)):
             if voicing_flag[i] == 1:
-                log_pitch[i] = log_pitch[i] + torch.log(torch.tensor(scale_list[0]))   
+                log_pitch[i] = log_pitch[i] + torch.log(torch.tensor(scale_list[0]))
                 formants[i,0] = formants[i,0] * scale_list[1]
                 formants[i,1] = formants[i,1] * scale_list[2]
                 formants[i,2] = formants[i,2] * scale_list[3]
@@ -126,17 +119,7 @@ def generate_wave_list(file_list, scale_list, a, h, fm_h, env_h):
 
         norm_feat = norm_feat.type(torch.FloatTensor).unsqueeze(0).to(device)
 
-        x_env = env_estim(norm_feat)
-
-        gen_feat = torch.cat((norm_feat, x_env), dim = -2)
-
-        allpole = torch.transpose(forward_levinson(torch.transpose(x_env,1,2)), 1,2)
-
-        # generate excitation
-        e_g_hat = generator(gen_feat)
-        
-        # apply synthesis filter
-        y_g_hat = generator.lpc.synthesis_filter(e_g_hat, allpole)
+        y_g_hat, _, _ = generator(norm_feat)
 
         output_file = os.path.splitext(os.path.basename(file))[0] + '_wave_' + str(scale_list[0]) + '_' + str(scale_list[1]) + '_' + str(scale_list[2]) + '_' + str(scale_list[3]) + '_' + str(scale_list[4]) + '.wav'
         output_orig = os.path.splitext(os.path.basename(file))[0] + '_orig.wav'
@@ -162,15 +145,16 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--input_path', default = None, description="Path to directory containing files to process.")
-    parser.add_argument('--list_file', default = None, description="Text file containing list of files to process. Optional argument to use instead of input_path.")
-    parser.add_argument('--output_path', default='test_output', description="Path to directory to save processed files")
-    parser.add_argument('--config', default='', description="Path to HiFi-GAN config json file")
-    parser.add_argument('--fm_config', default='', description="Path to feature mapping model config json file")
-    parser.add_argument('--env_config', default='', description="Path to envelope estimation model config json file")
-    parser.add_argument('--audio_ext', default = '.wav', description="Extension of the audio files to process")
-    parser.add_argument('--checkpoint_path', description="Path to pre-trained HiFi-GAN model")
-    parser.add_argument('--feature_scale', description="List of scales for pitch and formant frequencies -- [F0, F1, F2, F3, F4]")
+    parser.add_argument('--input_path', default = None, help="Path to directory containing files to process.")
+    parser.add_argument('--list_file', default = None, help="Text file containing list of files to process. Optional argument to use instead of input_path.")
+    parser.add_argument('--output_path', default='test_output', help="Path to directory to save processed files")
+    parser.add_argument('--config', default='', help="Path to HiFi-GAN config json file")
+    parser.add_argument('--fm_config', default='', help="Path to feature mapping model config json file")
+    parser.add_argument('--env_config', default='', help="Path to envelope estimation model config json file")
+    parser.add_argument('--audio_ext', default = '.wav', help="Extension of the audio files to process")
+    parser.add_argument('--checkpoint_path', help="Path to pre-trained HiFi-GAN model")
+    parser.add_argument('--feature_scale', help="List of scales for pitch and formant frequencies -- [F0, F1, F2, F3, F4]")
+
 
     a = parser.parse_args()
 
@@ -183,14 +167,9 @@ def main():
     with open(a.fm_config) as f:
         data = f.read()
     json_fm_config = json.loads(data)
-    fm_h = fm_config_obj(json_fm_config)
+    fm_h = AttrDict(json_fm_config)
 
-    with open(a.env_config) as f:
-         data = f.read()
-    json_env_config = json.loads(data)
-    env_h = fm_config_obj(json_env_config)
-
-    build_env(a.config, 'config.json', a.checkpoint_path)
+    # build_env(a.config, 'config.json', a.checkpoint_path)
     if a.input_path is not None:
         file_list = glob(os.path.join(a.input_path,'*' + a.audio_ext))
     elif a.list_file is not None:
@@ -199,7 +178,7 @@ def main():
         raise ValueError('Input arguments should include either input_path or file_list')
 
     if not os.path.exists(a.output_path):
-        os.mkdir(a.output_path)
+        os.makedirs(a.output_path, exist_ok=True)
 
     scale_list = str_to_list(a.feature_scale)
     if len(scale_list) != 5:
@@ -207,7 +186,7 @@ def main():
 
     torch.manual_seed(h.seed)
 
-    generate_wave_list(file_list, scale_list, a, h, fm_h, env_h)
+    generate_wave_list(file_list, scale_list, a, h, fm_h)
 
 
 if __name__ == '__main__':

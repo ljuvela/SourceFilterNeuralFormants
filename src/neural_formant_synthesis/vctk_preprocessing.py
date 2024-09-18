@@ -7,7 +7,7 @@ from tqdm import tqdm
 import argparse
 
 from feature_extraction import feature_extractor, MedianPool1d
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
 ta.set_audio_backend("sox_io")
 

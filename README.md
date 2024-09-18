@@ -41,57 +41,34 @@ A description of the presented model and sound samples compared to other synthes
 
 First, we need to create a conda environment to install our dependencies. Use mamba to speed up the process if possible.
 ```sh
-mamba create -n neuralformants -f environment.yml
-mamba activate neuralformants
+mamba env create -n neuralformants -f environment.yml
+conda activate neuralformants
 ```
+
+Pre-trained models are available in HuggingFace, and can be downloaded using git-lfs. If you don't have git-lfs installed (it's included in `environment.yml`), you can find it [here][lfs_link]. Use the following command to download the pre-trained models:
+```sh
+git submodule update --init --recursive
+```
+
+Install the package in development mode:
+```sh
+pip install -e .
+```
+
 
 #### GlotNet <a name="glotnet"></a>
-GlotNet module is required for WaveNet models and DSP functions. Full repository is available [here][GlotNet_link]
+GlotNet is included partially for WaveNet models and DSP functions. Full repository is available [here][GlotNet_link]
 
-We can clone the Glotnet repository in the root directory of this project and follow the instructions in it for installation. The process involves building some PyTorch C++ extensions and will take a few minutes.
-
-```sh
-git clone https://github.com/ljuvela/GlotNet.git
-cd GlotNet
-
-# Install GlotNet requirements in with conda
-conda install -c pytorch -c conda-forge pytorch torchaudio tensorboard scikit-build matplotlib pandas cmake eigen ninja pytest
-
-# Clone git submodules
-git submodule update --init --recursive
-
-# Build extensions and install
-pip install -v .
-
-# Run pytest unit tests to check everthing works correctly
-pytest test
-
-# Return to root directory
-cd ..
-
-```
 
 #### HiFi-GAN <a name="hifi"></a>
 HiFi-GAN is included in the `hifi_gan` subdirectory. Original source code is available [here][HiFi_link]
 
-#### Additional libraries <a name="additional"></a>
-
-Additional libraries that can't be found through conda need to be installed using pip.
-
-```sh
-pip install diffsptk pyworld
-```
 
 ## Pre-trained model <a name="pretrained"></a>
 
 Pre-trained models for every module of the proposed system are stored in HuggingFace. Check the model card at https://huggingface.co/pablopz/SourceFilterNeuralFormants
 
-In order to download them, first it is necessary to have [git-lfs][lfs_link] installed.
 
-```sh
-# install git-lfs with conda in case it's missing
-conda install -c conda-forge git-lfs
-```
 
 ```sh
 # Activate git-lfs and download pre-trained models
@@ -105,25 +82,50 @@ The config.json files in the pretrained models are adapted to work if the models
 
 We provide a script to run inference on the end-to-end architecture, such that an audio file can be provided as input and a wav file with the manipulated features is stored as output.
 
-In order to run inference on the proposed model, run the following command:
-
-```sh
-python inference_from_list.py --input_path "[path to directory with audio samples to process]" --output_path "[path to output directory]" --config "[path to HiFi-GAN config file]" --fm_config "[path to feature mapping model config file]" --env_config "[path to envelope estimation config file]" --checkpoint_path "[path to checkpoint file]" --feature_scale "[scale array]"
+Change the feature scaling to modify pitch (with F0) or formants. The scales are provided as a list of 5 elements with the following order:
+```python
+[F0, F1, F2, F3, F4]
 ```
-
 An example with the provided audio samples from the VCTK dataset can be run using:
 
+HiFi-Glot
 ```sh
-python inference_from_list.py --input_path "./Samples" --output_path "./Generated_Samples" --config "./SourceFilterNeuralFormants/HiFiExcitation/config.json" --fm_config "./SourceFilterNeuralFormants/FeatureMapping/config.json" --env_config "./SourceFilterNeuralFormants/EnvelopeEstimator/config.json" --checkpoint_path "./SourceFilterNeuralFormants/HiFiExcitation" --feature_scale "[1.0,1.0,1.0,1.0,1.0]"
+python inference_hifiglot.py \
+    --input_path "./Samples" \
+    --output_path "./output/hifi-glot" \
+    --config "./checkpoints/HiFi-Glot/config_hifigan.json" \
+    --fm_config "./checkpoints/HiFi-Glot/config_feature_map.json" \
+    --checkpoint_path "./checkpoints/HiFi-Glot" \
+    --feature_scale "[1.0, 1.0, 1.0, 1.0, 1.0]"
 ```
 
-The input to the inference script is provided as a txt file containing a list of paths to each of the audio files to process, separated by end of line. Additionally, the parameter [scale array] is a string with the format "[F0, F1, F2, F3, F4]", where each of the elements represents the scaling factor applied to each of the corresponding parameters.
+NFS
+```sh
+python inference_hifigan.py \
+    --input_path "./Samples" \
+    --output_path "./output/nfs" \
+    --config "./checkpoints/NFS/config_hifigan.json" \
+    --fm_config "./checkpoints/NFS/config_feature_map.json" \
+    --checkpoint_path "./checkpoints/NFS" \
+    --feature_scale "[1.0, 1.0, 1.0, 1.0, 1.0]"
+```
+
+NFS-E2E
+```sh
+python inference_hifigan.py \
+    --input_path "./Samples" \
+    --output_path "./output/nfs-e2e" \
+    --config "./checkpoints/NFS-E2E/config_hifigan.json" \
+    --fm_config "./checkpoints/NFS-E2E/config_feature_map.json" \
+    --checkpoint_path "./checkpoints/NFS-E2E" \
+    --feature_scale "[1.0, 1.0, 1.0, 1.0, 1.0]"
+```
+
 
 ## Model training <a name="training"></a>
 
-Training of the HiFi-GAN model excitation is possible in the end-to-end architecture by using the the script "train_e2e_DDSPNF.py".
+Training of the HiFi-GAN and HiFi-Glot models is possible with the end-to-end architecture by using the the scripts `train_e2e_hifigan.py` and `train_e2e_hifiglot.py`.
 
-More details on how to train the different models will be provided in the future.
 
 ## Citation information <a name="citation"></a>
 
