@@ -2,7 +2,7 @@
 
 Neural formant synthesis using differtiable resonant filters and source-filter model structure.
 
-Authors: [Pablo Pérez Zarazaga][pablo_profile], [Zofia Malisz][zofia_profile], [Gustav Eje Henter][gustav_profile], [Lauri Juvela][lauri_profile]
+Authors: [Lauri Juvela][lauri_profile], [Pablo Pérez Zarazaga][pablo_profile], [Gustav Eje Henter][gustav_profile], [Zofia Malisz][zofia_profile]
 
 [HiFi_link]: https://github.com/jik876/hifi-gan
 [GlotNet_link]: https://github.com/ljuvela/GlotNet
