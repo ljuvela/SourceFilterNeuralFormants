@@ -1,0 +1,3 @@
+[submodule "checkpoints/HiFi-Glot"]
+	path = checkpoints/HiFi-Glot
+	url = https://huggingface.co/ljuvela/SourceFilterNeuralFormantSynthesisE2E
