@@ -17,7 +17,7 @@ from neural_formant_synthesis.feature_extraction import feature_extractor, Norma
 from neural_formant_synthesis.models import SourceFilterFormantSynthesisGenerator
 
 
-from neural_formant_synthesis.glotnetsigproc.levinson import forward_levinson
+from neural_formant_synthesis.glotnet.sigproc.levinson import forward_levinson
 
 import torchaudio as ta
 import pandas as pd
@@ -104,7 +104,7 @@ def generate_wave_list(file_list, scale_list, a, h, fm_h):
         #pitch = pitch * scale_list[0]
         for i in range(voicing_flag.size(0)):
             if voicing_flag[i] == 1:
-                log_pitch[i] = log_pitch[i] + torch.log(torch.tensor(scale_list[0]))   
+                log_pitch[i] = log_pitch[i] + torch.log(torch.tensor(scale_list[0]))
                 formants[i,0] = formants[i,0] * scale_list[1]
                 formants[i,1] = formants[i,1] * scale_list[2]
                 formants[i,2] = formants[i,2] * scale_list[3]
@@ -168,9 +168,8 @@ def main():
         data = f.read()
     json_fm_config = json.loads(data)
     fm_h = AttrDict(json_fm_config)
-    # fm_h = fm_config_obj(json_fm_config)
 
-    build_env(a.config, 'config.json', a.checkpoint_path)
+    # build_env(a.config, 'config.json', a.checkpoint_path)
     if a.input_path is not None:
         file_list = glob(os.path.join(a.input_path,'*' + a.audio_ext))
     elif a.list_file is not None:

@@ -167,7 +167,7 @@ def main():
     fm_h = AttrDict(json_fm_config)
     # fm_h = fm_config_obj(json_fm_config)
 
-    build_env(a.config, 'config.json', a.checkpoint_path)
+    # build_env(a.config, 'config.json', a.checkpoint_path)
     if a.input_path is not None:
         file_list = glob(os.path.join(a.input_path,'*' + a.audio_ext))
     elif a.list_file is not None:

@@ -25,8 +25,6 @@ class Convolution(torch.nn.Conv1d):
                          device, dtype)
         self.causal = causal
         self.use_film = use_film
-        self._impl = ext.Convolution(in_channels, out_channels,
-                                     kernel_size, dilation, use_film)
 
     @property
     def receptive_field(self) -> int:

@@ -9,6 +9,9 @@ dependencies:
   - matplotlib
   - pandas
   - pytest
+  - git-lfs
   - pip:
     - diffsptk
     - pyworld
+    - tqdm
+    - ipdb
