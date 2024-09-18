@@ -6,9 +6,9 @@ dependencies:
   - pytorch=2.4
   - torchaudio
   - tensorboard
-  - scikit-build
-  - cmake
-  - eigen
-  - ninja
+  - matplotlib
+  - pandas
   - pytest
-  - openmp
+  - pip:
+    - diffsptk
+    - pyworld
