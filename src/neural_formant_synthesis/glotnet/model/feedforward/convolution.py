@@ -1,5 +1,4 @@
 import torch
-import glotnet.cpp_extensions as ext
 
 class Convolution(torch.nn.Conv1d):
     """ Causal convolution with optional FILM conditioning """
@@ -60,13 +59,7 @@ class Convolution(torch.nn.Conv1d):
                 raise ValueError(f"Mismatching timesteps, "
                                  f"input has {input.size(2)}, cond_input has {cond_input.size(2)}")
 
-        if sequential:
-            return ConvolutionFunction.apply(
-                self._impl,
-                input, cond_input,
-                *self.parameters())
-        else:
-            return self._forward_native(input=input, cond_input=cond_input, causal=self.causal)
+        return self._forward_native(input=input, cond_input=cond_input, causal=self.causal)
 
     def _forward_native(self, input: torch.Tensor,
                      cond_input: torch.Tensor,
@@ -103,36 +96,3 @@ class Convolution(torch.nn.Conv1d):
             else:
                 output = output + cond_input
         return output
-
-class ConvolutionFunction(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, impl, input, cond_input=None, *params):
-        """ Dilated covolution bindings forward pass
-
-        Args:
-            input: tensor of shape (batch, channels, time)
-            cond_input: (default = None)
-
-        """
-        weight, bias = params
-
-        input = input.permute(0, 2, 1) # (B, C, T) -> (B, T, C)
-        input = input.contiguous()
-        if cond_input is not None:
-            cond_input = cond_input.permute(0, 2, 1) # (B, C, T) -> (B, T, C)
-            cond_input = cond_input.contiguous()
-       
-        conv = impl
-        conv.set_weight(weight)
-        conv.set_bias(bias)
-        if cond_input is None:
-            output, = conv.forward(input)
-        else:
-            output, = conv.forward_cond(input, cond_input)
-
-        output = output.permute(0, 2, 1) # (B, T, C) -> (B, C, T)
-        return output 
-
-    def backward(self, *output_grads):
-        raise NotImplementedError

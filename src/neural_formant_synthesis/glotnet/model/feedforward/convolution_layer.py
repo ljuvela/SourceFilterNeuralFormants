@@ -1,6 +1,5 @@
 import torch
 from typing import Tuple
-import glotnet.cpp_extensions as ext
 from .convolution import Convolution
 
 
@@ -86,17 +85,7 @@ class ConvolutionLayer(torch.nn.Module):
                 but conditioning input was provided at forward pass")
 
         if sequential:
-            skip_weight = None if self.skip_channels is None else self.skip.weight
-            skip_bias = None if self.skip_channels is None else self.skip.bias
-            cond_weight = self.cond_1x1.weight if self.use_conditioning else None
-            cond_bias = self.cond_1x1.bias if self.use_conditioning else None
-            return ConvolutionLayerFunction.apply(
-                input, self.conv.weight, self.conv.bias,
-                self.out.weight, self.out.bias,
-                skip_weight, skip_bias,
-                cond_weight, cond_bias,
-                self.dilation, self.activation,
-                self.use_output_transform, cond_input)
+            raise NotImplementedError
         else:
             return self._forward_native(input=input, cond_input=cond_input)
 
@@ -122,79 +111,4 @@ class ConvolutionLayer(torch.nn.Module):
             return output
         else:
             return output, skip
-
-class ConvolutionLayerFunction(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, input: torch.Tensor, weight_conv: torch.Tensor, bias_conv: torch.Tensor,
-                weight_out: torch.Tensor, bias_out: torch.Tensor,
-                weight_skip: torch.Tensor, bias_skip: torch.Tensor,
-                weight_cond: torch.Tensor, bias_cond: torch.Tensor,
-                dilation: int, activation: str, use_output_transform: bool,
-                cond_input: torch.Tensor = None, time_major: bool = True
-                ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """ Convolution Layer forward
-
-        Args:
-            input: tensor of shape (batch, channels, time) (default) or (batch, time, channels)
-            weight_conv: Conv1d weight tensor
-                shape = (2 * ch_out, ch_in, kernel_size)
-            bias_conv:
-                shape = (ch_out,)
-            dilation: dilation factor (int)
-            cond_input: (default = None)
-            time_major:
-                if True: input.shape == (batch, channels, time), (PyTorch default)
-                else: input.shape == (batch, time, channels),
-
-        Returns:
-            output: layer output, shape = (batch, ch_out, timesteps)
-            skip: skip output, shape = (batch, ch_out, timesteps)
-
-            if use_output_transform == False
-                'output' and 'skip' are the same variable
-        """
-        ctx.time_major = time_major
-        if ctx.time_major:
-            input = input.permute(0, 2, 1)  # (B, C, T) -> (B, T, C)
-            if cond_input is not None:
-                cond_input = cond_input.permute(0, 2, 1)  # (B, C, T) -> (B, T, C)
-                cond_input = cond_input.contiguous()
-
-        input = input.contiguous()
-        ctx.dilation = dilation
-
-        use_skips = weight_skip is not None
-
-        if cond_input is None:
-            if use_skips:
-                output, skip = ext.convolution_layer_skip_forward(
-                    input, weight_conv, bias_conv, weight_out, bias_out, weight_skip, bias_skip,
-                    dilation, use_output_transform, activation)
-            else:
-                output, = ext.convolution_layer_forward(
-                    input, weight_conv, bias_conv, weight_out, bias_out,
-                    dilation, use_output_transform, activation)
-        else:
-            if use_skips:
-                output, skip = ext.convolution_layer_skip_cond_forward(
-                    input, cond_input, weight_conv, bias_conv, weight_out, bias_out,
-                    weight_skip, bias_skip, weight_cond, bias_cond,
-                    dilation, use_output_transform, activation)
-            else:
-                pass
-
-        if ctx.time_major:
-            output = output.permute(0, 2, 1)  # (B, T, C) -> (B, C, T)
-            if use_skips:
-                skip = skip.permute(0, 2, 1)  # (B, T, C) -> (B, C, T)
-
-        if use_skips:
-            return output, skip
-        else:
-            return output
-
-    @staticmethod
-    def backward(self, d_output, d_skip):
-        raise NotImplementedError("Backward function not implemented for sequential processing")
 

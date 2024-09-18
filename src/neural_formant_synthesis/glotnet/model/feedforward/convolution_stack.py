@@ -1,6 +1,5 @@
 import torch
 from typing import List
-import glotnet.cpp_extensions as ext
 from .convolution_layer import ConvolutionLayer
 
 
@@ -112,14 +111,7 @@ class ConvolutionStack(torch.nn.Module):
             raise RuntimeError("Module has not been initialized to use conditioning, but conditioning input was provided at forward pass")
 
         if sequential:
-            return ConvolutionStackFunction.apply(
-                input,
-                self.weights_conv, self.biases_conv,
-                self.weights_out, self.biases_out,
-                self.weights_skip, self.biases_skip,
-                self.weights_cond, self.biases_cond,
-                self.dilations, self.activation, self.use_residual,
-                cond_input)
+            raise NotImplementedError("Sequential mode not implemented")
         else:
             return self._forward_native(input=input, cond_input=cond_input)
 
@@ -132,53 +124,3 @@ class ConvolutionStack(torch.nn.Module):
             x = x + h  # residual connection
             skips.append(s)
         return x, skips
-
-class ConvolutionStackFunction(torch.autograd.Function):
-
-    @staticmethod
-    def forward(ctx, input: torch.Tensor,
-                weights_conv: List[torch.Tensor], biases_conv: List[torch.Tensor],
-                weights_out: List[torch.Tensor], biases_out: List[torch.Tensor],
-                weights_skip: List[torch.Tensor], biases_skip: List[torch.Tensor],
-                weights_cond: List[torch.Tensor], biases_cond: List[torch.Tensor],
-                dilations: List[int], activation: str, use_residual: bool,
-                cond_input: torch.Tensor = None, time_major: bool = True):
-
-        num_layers = len(dilations)
-
-        ctx.time_major = time_major
-        if ctx.time_major:
-            input = input.permute(0, 2, 1) # (B, C, T) -> (B, T, C)
-            if cond_input is not None:
-                cond_input = cond_input.permute(0, 2, 1) # (B, C, T) -> (B, T, C)
-
-        input = input.contiguous()
-        if cond_input is not None:
-            cond_input = cond_input.contiguous()
-
-        ctx.save_for_backward(input, *weights_conv, *biases_conv,
-                              *weights_out, *biases_out)
-        ctx.dilations = dilations
-
-        if cond_input is None:
-            output, skips = ext.convolution_stack_forward(
-                input, weights_conv, biases_conv, weights_out, biases_out,
-                weights_skip, biases_skip,
-                dilations, use_residual, activation)
-        else:
-            output, skips = ext.convolution_stack_cond_forward(
-                input, cond_input, weights_conv, biases_conv, weights_out, biases_out,
-                weights_skip, biases_skip, weights_cond, biases_cond,
-                dilations, use_residual, activation)
-
-        if ctx.time_major:
-            output = output.permute(0, 2, 1) # (B, T, C) -> (B, C, T)
-            skips = skips.split(1, dim=1) # (B, L, T, C) -> L * (B, 1, T, C)
-            skips = [s.squeeze(1).permute(0, 2, 1) for s in skips] # L * (B, 1, T, C) -> L * (B, C, T)
-        else:
-            raise NotImplementedError
-
-        return output, skips
-
-    def backward(self, d_output, d_skip):
-        raise NotImplementedError("Backward function not implemented for sequential processing")
