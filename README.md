@@ -39,10 +39,10 @@ A description of the presented model and sound samples compared to other synthes
 
 #### Conda environment <a name="conda"></a>
 
-First, we need to create a conda environment to install our dependencies.
+First, we need to create a conda environment to install our dependencies. Use mamba to speed up the process if possible.
 ```sh
-conda create -n neuralformants python=3.10 
-conda activate neuralformants
+mamba create -n neuralformants -f environment.yml
+mamba activate neuralformants
 ```
 
 #### GlotNet <a name="glotnet"></a>
