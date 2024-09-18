@@ -1,7 +1,6 @@
 import torch
 import diffsptk
-from Neural_formant_synthesis.functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
-# from functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
+from neural_formant_synthesis.functions import frame_energy, spectral_centroid, tilt_levinson, root_to_formant, levinson, pitch_extraction
 
 
 class feature_extractor(torch.nn.Module):

@@ -1,5 +1,5 @@
 import torch
-from glotnet.sigproc.lfilter import LFilter
+from neural_formant_synthesis.glotnet.sigproc.lfilter import LFilter
 from .levinson import spectrum_to_allpole
 
 

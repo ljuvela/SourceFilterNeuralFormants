@@ -2,22 +2,22 @@ import os
 import torch
 from torchaudio.models import Conformer
 
-from glotnet.model.feedforward.wavenet import WaveNet
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.model.feedforward.wavenet import WaveNet
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
 from .sigproc.levinson import forward_levinson, spectrum_to_allpole
 from .sigproc.lpc import LinearPredictor
 
 
 
-from hifi_gan.models import Generator
-from hifi_gan.utils import load_checkpoint
+from neural_formant_synthesis.third_party.hifi_gan.models import Generator
+from neural_formant_synthesis.third_party.hifi_gan.utils import load_checkpoint
 
 import diffsptk
 from .functions import root_to_formant
 from .feature_extraction import Normaliser
-# from Neural_formant_synthesis.functions import root_to_formant
-# from Neural_formant_synthesis.feature_extraction import Normaliser
+# from neural_formant_synthesis.functions import root_to_formant
+# from neural_formant_synthesis.feature_extraction import Normaliser
 
 class NeuralFormant_Envelope(torch.nn.Module):
     """
