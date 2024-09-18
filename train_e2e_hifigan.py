@@ -21,15 +21,15 @@ from hifi_gan.models import MultiPeriodDiscriminator, MultiScaleDiscriminator, f
 from hifi_gan.utils import plot_spectrogram, scan_checkpoint, load_checkpoint, save_checkpoint
 
 
-from glotnet.sigproc.lpc import LinearPredictor
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.sigproc.lpc import LinearPredictor
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
 from Neural_formant_synthesis.Dataset import FeatureDataset_List
 from Neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet, Envelope_conformer
 from Neural_formant_synthesis.models import NeuralFormantSynthesisGenerator
 
 
-from glotnet.sigproc.levinson import forward_levinson
+from neural_formant_synthesis.glotnet.sigproc.levinson import forward_levinson
 
 import torchaudio as ta
 

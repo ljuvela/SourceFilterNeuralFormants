@@ -41,9 +41,14 @@ A description of the presented model and sound samples compared to other synthes
 
 First, we need to create a conda environment to install our dependencies. Use mamba to speed up the process if possible.
 ```sh
-mamba create -n neuralformants -f environment.yml
-mamba activate neuralformants
+mamba env create -n neuralformants -f environment.yml
+conda activate neuralformants
 ```
+
+```sh
+git submodule update --init --recursive
+```
+
 
 #### GlotNet <a name="glotnet"></a>
 GlotNet module is required for WaveNet models and DSP functions. Full repository is available [here][GlotNet_link]
@@ -51,19 +56,19 @@ GlotNet module is required for WaveNet models and DSP functions. Full repository
 We can clone the Glotnet repository in the root directory of this project and follow the instructions in it for installation. The process involves building some PyTorch C++ extensions and will take a few minutes.
 
 ```sh
-git clone https://github.com/ljuvela/GlotNet.git
+# git clone https://github.com/ljuvela/GlotNet.git
 cd GlotNet
 
 # Install GlotNet requirements in with conda
-conda install -c pytorch -c conda-forge pytorch torchaudio tensorboard scikit-build matplotlib pandas cmake eigen ninja pytest
+# conda install -c pytorch -c conda-forge pytorch torchaudio tensorboard scikit-build matplotlib pandas cmake eigen ninja pytest
 
 # Clone git submodules
-git submodule update --init --recursive
+# git submodule update --init --recursive
 
 # Build extensions and install
-pip install -v .
+pip install -v -e .
 
-# Run pytest unit tests to check everthing works correctly
+# Run pytest unit tests to check everything works correctly
 pytest test
 
 # Return to root directory

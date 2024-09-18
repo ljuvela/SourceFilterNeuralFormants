@@ -20,8 +20,8 @@ from hifi_gan.models import discriminator_metrics
 from hifi_gan.utils import plot_spectrogram, scan_checkpoint, load_checkpoint, save_checkpoint
 
 
-from glotnet.sigproc.lpc import LinearPredictor
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.sigproc.lpc import LinearPredictor
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
 torch.backends.cudnn.benchmark = True
 

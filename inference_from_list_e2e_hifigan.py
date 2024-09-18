@@ -5,19 +5,18 @@ import argparse
 import json
 import torch
 from hifi_gan.env import AttrDict, build_env
-#from hifi_gan.models import discriminator_metrics
 from hifi_gan.utils import scan_checkpoint
 
 
-from glotnet.sigproc.lpc import LinearPredictor
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.sigproc.lpc import LinearPredictor
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
-from Neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet,  Envelope_conformer
-from Neural_formant_synthesis.feature_extraction import feature_extractor, Normaliser, MedianPool1d
-from Neural_formant_synthesis.models import NeuralFormantSynthesisGenerator
+from neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet,  Envelope_conformer
+from neural_formant_synthesis.feature_extraction import feature_extractor, Normaliser, MedianPool1d
+from neural_formant_synthesis.models import NeuralFormantSynthesisGenerator
 
 
-from glotnet.sigproc.levinson import forward_levinson
+from neural_formant_synthesis.glotnet.sigproc.levinson import forward_levinson
 
 import torchaudio as ta
 import pandas as pd
