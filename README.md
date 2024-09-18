@@ -31,7 +31,7 @@ Authors: [Lauri Juvela][lauri_profile], [Pablo Pérez Zarazaga][pablo_profile], 
 
 We present a model that performs neural speech synthesis using the structure of the source-filter model, allowing to independently inspect and manipulate the spectral envelope and glottal excitation:
 
-![Neural formant pipeline follwing the source-filter model architectrue](./Images/LPC-NFS.png "Neural formant pipeline follwing the source-filter model architectrue.")
+![Neural formant pipeline follwing the source-filter model architectrue](./images/LPC-NFS.png "Neural formant pipeline follwing the source-filter model architectrue.")
 
 A description of the presented model and sound samples compared to other synthesis/manipulation systems can be found in the [project's demo webpage][demopage_link]
 
