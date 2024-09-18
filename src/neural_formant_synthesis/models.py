@@ -16,8 +16,8 @@ from neural_formant_synthesis.third_party.hifi_gan.utils import load_checkpoint
 import diffsptk
 from .functions import root_to_formant
 from .feature_extraction import Normaliser
-# from Neural_formant_synthesis.functions import root_to_formant
-# from Neural_formant_synthesis.feature_extraction import Normaliser
+# from neural_formant_synthesis.functions import root_to_formant
+# from neural_formant_synthesis.feature_extraction import Normaliser
 
 class NeuralFormant_Envelope(torch.nn.Module):
     """

@@ -24,9 +24,9 @@ from neural_formant_synthesis.third_party.hifi_gan.utils import plot_spectrogram
 from neural_formant_synthesis.glotnet.sigproc.lpc import LinearPredictor
 from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
-from Neural_formant_synthesis.Dataset import FeatureDataset_List
-from Neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet, Envelope_conformer
-from Neural_formant_synthesis.models import NeuralFormantSynthesisGenerator
+from neural_formant_synthesis.dataset import FeatureDataset_List
+from neural_formant_synthesis.models import FM_Hifi_Generator, fm_config_obj, Envelope_wavenet, Envelope_conformer
+from neural_formant_synthesis.models import NeuralFormantSynthesisGenerator
 
 
 from neural_formant_synthesis.glotnet.sigproc.levinson import forward_levinson
