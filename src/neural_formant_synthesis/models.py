@@ -2,8 +2,8 @@ import os
 import torch
 from torchaudio.models import Conformer
 
-from glotnet.model.feedforward.wavenet import WaveNet
-from glotnet.sigproc.emphasis import Emphasis
+from neural_formant_synthesis.glotnet.model.feedforward.wavenet import WaveNet
+from neural_formant_synthesis.glotnet.sigproc.emphasis import Emphasis
 
 from .sigproc.levinson import forward_levinson, spectrum_to_allpole
 from .sigproc.lpc import LinearPredictor
