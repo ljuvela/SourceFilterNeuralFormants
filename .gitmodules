@@ -7,6 +7,3 @@
 [submodule "checkpoints/NFS-E2E"]
 	path = checkpoints/NFS-E2E
 	url = https://huggingface.co/ljuvela/NeuralFormantSynthesisE2E
-[submodule "GlotNet"]
-	path = GlotNet
-	url = https://github.com/ljuvela/GlotNet.git
