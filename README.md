@@ -63,21 +63,6 @@ GlotNet is included partially for WaveNet models and DSP functions. Full reposit
 #### HiFi-GAN <a name="hifi"></a>
 HiFi-GAN is included in the `hifi_gan` subdirectory. Original source code is available [here][HiFi_link]
 
-
-## Pre-trained model <a name="pretrained"></a>
-
-Pre-trained models for every module of the proposed system are stored in HuggingFace. Check the model card at https://huggingface.co/pablopz/SourceFilterNeuralFormants
-
-
-
-```sh
-# Activate git-lfs and download pre-trained models
-git lfs install
-git clone https://huggingface.co/pablopz/SourceFilterNeuralFormants 
-```
-
-The config.json files in the pretrained models are adapted to work if the models are cloned in the root directory of the project. Change the path defined in those files if necessary.
-
 ## Inference <a name="inference"></a>
 
 We provide a script to run inference on the end-to-end architecture, such that an audio file can be provided as input and a wav file with the manipulated features is stored as output.
