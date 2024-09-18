@@ -4,8 +4,8 @@ import os
 import argparse
 import json
 import torch
-from hifi_gan.env import AttrDict, build_env
-from hifi_gan.utils import scan_checkpoint
+from neural_formant_synthesis.third_party.hifi_gan.env import AttrDict, build_env
+from neural_formant_synthesis.third_party.hifi_gan.utils import scan_checkpoint
 
 
 from neural_formant_synthesis.glotnet.sigproc.lpc import LinearPredictor

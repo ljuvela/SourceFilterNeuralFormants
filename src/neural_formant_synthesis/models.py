@@ -10,8 +10,8 @@ from .sigproc.lpc import LinearPredictor
 
 
 
-from hifi_gan.models import Generator
-from hifi_gan.utils import load_checkpoint
+from neural_formant_synthesis.third_party.hifi_gan.models import Generator
+from neural_formant_synthesis.third_party.hifi_gan.utils import load_checkpoint
 
 import diffsptk
 from .functions import root_to_formant
