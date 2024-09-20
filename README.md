@@ -7,7 +7,7 @@ Authors: [Lauri Juvela][lauri_profile], [Pablo Pérez Zarazaga][pablo_profile], 
 [HiFi_link]: https://github.com/jik876/hifi-gan
 [GlotNet_link]: https://github.com/ljuvela/GlotNet
 [arxiv_link]: http://arxiv.org/abs/placeholder_link
-[demopage_link]: https://perezpoz.github.io/DDSPneuralformants
+[demopage_link]: https://perezpoz.github.io/SFNeuralFormants
 [gustav_profile]: https://people.kth.se/~ghe/
 [pablo_profile]: https://www.kth.se/profile/pablopz
 [zofia_profile]: https://www.kth.se/profile/malisz
@@ -16,22 +16,25 @@ Authors: [Lauri Juvela][lauri_profile], [Pablo Pérez Zarazaga][pablo_profile], 
 [lfs_link]:https://git-lfs.com
 
 ## Table of contents
-1. [Model structure](#model_struct)
-2. [Repository installation](#install)
+1. [Model overview](#model_struct)
+    1. [Sound samples](#sound_samples)
+3. [Repository installation](#install)
     1. [Conda environment](#conda)
     2. [GlotNet](#glotnet)
     3. [HiFi-GAN](#hifi)
     4. [Additional libraries](#additional)
-3. [Pre-trained models](#pretrained)
-4. [Inference](#inference)
-5. [Training](#training)
-6. [Citation information](#citation)
+4. [Pre-trained models](#pretrained)
+5. [Inference](#inference)
+6. [Training](#training)
+7. [Citation information](#citation)
 
-## Model structure <a name="model_struct"></a>
+## Model overview <a name="model_struct"></a>
 
 We present a model that performs neural speech synthesis using the structure of the source-filter model, allowing to independently inspect and manipulate the spectral envelope and glottal excitation:
 
 ![Neural formant pipeline follwing the source-filter model architectrue](./images/LPC-NFS.png "Neural formant pipeline follwing the source-filter model architectrue.")
+
+### Sound samples <a name="sound_samples"></a>
 
 A description of the presented model and sound samples compared to other synthesis/manipulation systems can be found in the [project's demo webpage][demopage_link]
 
